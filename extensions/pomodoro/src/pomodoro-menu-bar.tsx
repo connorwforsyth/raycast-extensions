@@ -1,9 +1,10 @@
 import { MenuBarExtra, Icon, Image, Color } from "@raycast/api";
 import { useState } from "react";
-import { FocusText, LongBreakText, ShortBreakText } from "../lib/constants";
+import { FocusText, IntervalTitles, LongBreakText, ShortBreakText, TimeStoppedPlaceholder } from "./lib/constants";
 import {
   createInterval,
   getCurrentInterval,
+  getNextIntervalType,
   resetInterval,
   restartInterval,
   pauseInterval,
@@ -13,9 +14,11 @@ import {
   preferences,
   progress,
   endOfInterval,
-} from "../lib/intervals";
-import { secondsToTime } from "../lib/secondsToTime";
-import { Interval, IntervalType } from "../lib/types";
+  skipInterval,
+} from "./lib/intervals";
+import { secondsToTime } from "./lib/secondsToTime";
+import { Interval, IntervalType } from "./lib/types";
+import { checkDNDExtensionInstall, setDND } from "./lib/doNotDisturb";
 
 const IconTint: Color.Dynamic = {
   light: "#000000",
@@ -30,7 +33,8 @@ export default function TogglePomodoroTimer() {
     endOfInterval(currentInterval);
   }
 
-  function onStart(type: IntervalType) {
+  async function onStart(type: IntervalType) {
+    await checkDNDExtensionInstall();
     setCurrentInterval(createInterval(type));
   }
 
@@ -45,11 +49,17 @@ export default function TogglePomodoroTimer() {
   function onReset() {
     resetInterval();
     setCurrentInterval(undefined);
+    setDND(false);
   }
 
   function onRestart() {
     restartInterval();
     setCurrentInterval(getCurrentInterval());
+  }
+
+  async function onSkip() {
+    await checkDNDExtensionInstall();
+    setCurrentInterval(skipInterval());
   }
 
   let icon: Image.ImageLike;
@@ -59,14 +69,16 @@ export default function TogglePomodoroTimer() {
     icon = { source: `tomato-${progressInTenth}.png`, tintColor: IconTint };
   }
 
-  const title = preferences.enableTimeOnMenuBar
-    ? currentInterval
-      ? secondsToTime(currentInterval.length - duration(currentInterval))
-      : "--:--"
-    : undefined;
+  const stopedPlaceholder = preferences.hideTimeWhenStopped ? undefined : TimeStoppedPlaceholder;
+  const title = currentInterval ? secondsToTime(currentInterval.length - duration(currentInterval)) : stopedPlaceholder;
+
+  if (!currentInterval && preferences.hideMenuBarWhenStopped) {
+    return null;
+  }
 
   return (
-    <MenuBarExtra icon={icon} title={title} tooltip={"Pomodoro"}>
+    <MenuBarExtra icon={icon} title={preferences.enableTimeOnMenuBar ? title : undefined} tooltip={"Pomodoro"}>
+      {preferences.enableTimeOnMenuBar ? null : <MenuBarExtra.Item icon="⏰" title={TimeStoppedPlaceholder} />}
       {currentInterval ? (
         <>
           {isPaused(currentInterval) ? (
@@ -96,6 +108,13 @@ export default function TogglePomodoroTimer() {
             onAction={onRestart}
             shortcut={{ modifiers: ["cmd"], key: "t" }}
           />
+          <MenuBarExtra.Item
+            title="Skip to Next"
+            subtitle={IntervalTitles[getNextIntervalType(currentInterval.type)]}
+            icon={Icon.Forward}
+            onAction={onSkip}
+            shortcut={{ modifiers: ["cmd"], key: "n" }}
+          />
         </>
       ) : (
         <>
@@ -103,21 +122,21 @@ export default function TogglePomodoroTimer() {
             title={FocusText}
             subtitle={`${preferences.focusIntervalDuration}:00`}
             icon={`🎯`}
-            onAction={() => onStart("focus")}
+            onAction={async () => await onStart("focus")}
             shortcut={{ modifiers: ["cmd"], key: "f" }}
           />
           <MenuBarExtra.Item
             title={ShortBreakText}
             subtitle={`${preferences.shortBreakIntervalDuration}:00`}
             icon={`🧘‍♂️`}
-            onAction={() => onStart("short-break")}
+            onAction={async () => await onStart("short-break")}
             shortcut={{ modifiers: ["cmd"], key: "s" }}
           />
           <MenuBarExtra.Item
             title={LongBreakText}
             subtitle={`${preferences.longBreakIntervalDuration}:00`}
             icon={`🚶`}
-            onAction={() => onStart("long-break")}
+            onAction={async () => await onStart("long-break")}
             shortcut={{ modifiers: ["cmd"], key: "l" }}
           />
         </>

@@ -9,7 +9,8 @@
     "jhjr",
     "thomas",
     "pernielsentikaer",
-    "ramsay"
+    "ramsay",
+    "henrik"
   ],
   "license": "MIT",
   "commands": [
@@ -30,6 +31,9 @@
       "placeholder": "See README.md for manual setup",
       "required": false
     }
+  ],
+  "platforms": [
+    "macOS"
   ],
   "categories": [
     "Communication",

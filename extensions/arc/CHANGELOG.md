@@ -1,5 +1,131 @@
 # Arc Changelog
 
+## [Added new screenshots] - 2026-10-13
+
+## [AI Tools Improvements] - 2026-10-13
+
+- Added the `get-focused-tab` AI tool, which returns the active tab of the frontmost window along with its Space.
+- `select-tab` and `close-tab` now wait for Arc to finish and return a clear error when the tab ID does not exist, instead of silently succeeding.
+- Moved the AI instructions and evals to `ai.yaml`, with evals covering all 13 tools.
+
+## [Fix] - 2026-10-09
+
+- Fixed keyboard navigation in `Search Tabs` jumping over History straight to Suggestions while history was still loading. The tab sections now stay mounted during history search so the list keeps its selection anchor.
+
+## [Fix] - 2026-10-08
+
+- Fixed `Access Spaces and Favorites` launching Arc in the background every 10 minutes when Arc is not running.
+- Updated `@raycast/api`, `@raycast/utils` and the ESLint config, and resolved dependency vulnerabilities.
+- Replaced hand-written shortcuts with Raycast's common shortcuts and removed the reserved `Configure Command` shortcut.
+
+## [Fix] - 2026-09-14
+
+- Fixed `Search Tabs` becoming slow with many tabs by batching the AppleScript calls used to look up each tab's Space name, instead of issuing one call per tab.
+
+## [Improvements] - 2026-09-07
+
+- Display the Space name in `Search Tabs` and `Search Arc` results to help distinguish tabs with identical names across different Spaces.
+- `getTabsWithSpaceInfo` now falls back to `getTabs()` when the AppleScript response is empty or unparseable, so a Space-metadata failure drops only the Space tags — not the entire tab list.
+
+## [Fix SQL injection in history and download search] - 2026-06-23
+
+- Escape single quotes and LIKE wildcards (`%`, `_`) in search queries to prevent SQL injection
+- Switch LIKE string literals from double quotes to single quotes (correct SQLite syntax)
+- Add missing escaping for the non-hook `getHistory` function
+
+## [Security Maintenance] - 2026-05-21
+
+- Updated the extension to address security advisories.
+
+## [Performance Improvement] - 2026-04-30
+
+- Replace manual tab iteration loop with AppleScript `whose` filter for direct tab lookup, improving responsiveness with many open tabs
+
+## [New Features] - 2026-04-24
+
+- Added `Reset all tabs in current space` command to reset all tabs in the currently active space (disabled by default).
+
+## [Security Fix] - 2026-03-17
+
+- Bump lodash/lodash-es to fix prototype pollution vulnerability (CVE-2025-13465)
+
+## [Fixed Arc duplicate windows] - 2026-03-04
+
+- Fixed duplicate window creation when launching Arc Browser from a stopped state
+- Improved window management logic for selectTab and selectSpace commands
+
+## [Fixes] - 2026-02-01
+
+- Fixed an issue where selecting a tab would not open it due to a timing issue with closing the Raycast window.
+
+## [New Features] - 2025-10-27
+
+- Added `Search Space Tabs` command to search and select tabs in the current space only.
+
+## [Update] - 2025-09-29
+
+- Added support for Zen Browser, Dia, and Perplexity Comet as browser options in the `Open in Other Browser` command.
+
+## [Improvements] - 2025-08-04
+
+- Added preferences to order the tabs in the search results for the `Search Arc` command.
+
+## [Chore: Moved contributor] - 2025-06-03
+
+## [New Features] - 2025-05-12
+
+- Added UnDuck search engine for the commands `Search Arc`, `Open New Little Arc Window` and `Open New Incognito Window`.
+- Added ability to automatically prepend 'https://' when opening a URL
+
+## [Improvements] - 2025-04-16
+
+- When opening a new incognito window, open a blank tab if no URL is given.
+  - A previous update caused a regression where this behavior was no longer
+    supported.
+
+## [Suggest opening URL] - 2025-03-31
+
+When searching for a URL, offer to open the URL
+
+## [✨ AI Enhancements] - 2025-02-21
+
+AI Tools to:
+
+- Search Tabs
+- Search History
+- Open New Window
+- Open New Blank Window
+- Open New Little Arc Window
+- Open New Incognito Window
+- Open New Tab
+- Search Spaces
+
+## [Improvements] - 2024-10-25
+
+- `Search Tabs` now can search with url and search title with chinese pinyin.
+- `Search Tabs` now can do fuzzy matching.
+
+## [Improvements] - 2024-09-10
+
+- `Search History` now searches across all Arc profiles. Results from the search display which profile they are from.
+
+## [Improvements] - 2024-09-02
+
+- Added `Search Downloads` command to search for downloads in Arc.
+
+## [Improvements] - 2024-08-26
+
+- Replaced HUD error messages with toast messages.
+- Added a list section to the `Search History` command.
+
+## [Fixes] - 2024-07-22
+
+- Fixed an issue where the `Search Arc`, `Search Spaces`, `Search Tabs`, and `Access Spaces and Favorites` commands would fail if Arc was not open.
+
+## [Update] - 2024-07-06
+
+- Removed the `New Note` command.
+
 ## [Improvements] - 2024-03-15
 
 - Added search suggestions to Kagi search engine.

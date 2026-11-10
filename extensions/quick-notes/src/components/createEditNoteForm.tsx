@@ -1,34 +1,33 @@
-import { Form, ActionPanel, Action, showToast, useNavigation, Icon } from "@raycast/api";
+import { Form, ActionPanel, Action, showToast, useNavigation, Icon, Keyboard } from "@raycast/api";
 import { useAtom } from "jotai";
 import { notesAtom, tagsAtom } from "../services/atoms";
-import CreateTag from "./createTag";
+import CreateEditTagForm from "./createEditTagForm";
 import { useEffect, useRef } from "react";
 import { getTintColor } from "../utils/utils";
 import { useForm } from "@raycast/utils";
 
-type NoteForm = {
-  title: string;
-  note: string;
-  tags: string[];
-};
+type NoteForm = { title: string; icon: string; note: string; tags: string[] };
 
-const CreateEditNoteForm = ({
+export default function CreateEditNoteForm({
   createdAt,
   title,
+  icon,
   note,
   tags,
   isDraft = false,
 }: {
   createdAt?: Date;
   title?: string;
+  icon?: string;
   note?: string;
   tags?: string[];
   isDraft?: boolean;
-}) => {
+}) {
   const [notes, setNotes] = useAtom(notesAtom);
   const [tagStore] = useAtom(tagsAtom);
   const dataRef = useRef<NoteForm & { submittedForm: boolean }>({
     title: title ?? "",
+    icon: icon ?? "Document",
     note: note ?? "",
     tags: tags ?? [],
     submittedForm: false,
@@ -44,9 +43,11 @@ const CreateEditNoteForm = ({
           n.createdAt === createdAt
             ? {
                 title: values.title,
+                icon: values.icon,
                 body: values.note,
                 tags: values.tags,
                 createdAt: n.createdAt,
+                summary: n.summary,
                 updatedAt: new Date(),
                 is_draft: false,
               }
@@ -58,6 +59,7 @@ const CreateEditNoteForm = ({
           ...notes,
           {
             title: values.title,
+            icon: values.icon,
             body: values.note,
             tags: values.tags,
             createdAt: new Date(),
@@ -69,11 +71,7 @@ const CreateEditNoteForm = ({
       showToast({ title: "Note Saved" });
       pop();
     },
-    initialValues: {
-      note,
-      title,
-      tags,
-    },
+    initialValues: { note, title, tags, icon: icon ?? "Document" },
     validation: {
       title: (value) => {
         if (!value) {
@@ -92,6 +90,7 @@ const CreateEditNoteForm = ({
     dataRef.current = {
       ...dataRef.current,
       title: values.title,
+      icon: values.icon,
       note: values.note,
       tags: values.tags,
     };
@@ -102,6 +101,7 @@ const CreateEditNoteForm = ({
     const autoSave = () => {
       const noteField = dataRef.current.note;
       const titleField = dataRef.current.title;
+      const iconField = dataRef.current.icon;
       const tagsField = dataRef.current.tags;
 
       // Don't autosave if form errors
@@ -109,15 +109,20 @@ const CreateEditNoteForm = ({
         return;
       }
 
-      if ((noteField || titleField) && !dataRef.current.submittedForm && (noteField !== note || titleField !== title)) {
+      if (
+        !dataRef.current.submittedForm &&
+        ((noteField && noteField !== note) || (titleField && titleField !== title) || iconField !== icon)
+      ) {
         const noteExists = notes.find((n) => n.createdAt === createdAt);
         if (noteExists) {
           const updatedNotes = notes.map((n) => {
             if (n.createdAt === createdAt) {
               return {
                 ...n,
-                title: titleField ?? "",
-                body: noteField ?? "",
+                // Only update fields that have changed
+                title: titleField !== title ? titleField : n.title,
+                icon: iconField,
+                body: noteField !== note ? noteField : n.body,
                 tags: tagsField ?? [],
                 updatedAt: new Date(),
               };
@@ -126,10 +131,12 @@ const CreateEditNoteForm = ({
           });
           setNotes(updatedNotes);
         } else if (!noteExists) {
+          // For new notes
           setNotes([
             ...notes,
             {
               title: titleField ?? "",
+              icon: iconField,
               body: noteField ?? "",
               tags: tagsField ?? [],
               is_draft: isDraft,
@@ -151,28 +158,26 @@ const CreateEditNoteForm = ({
         <ActionPanel>
           <Action.SubmitForm
             title={"Save Note"}
-            icon={{
-              source: Icon.SaveDocument,
-              tintColor: getTintColor("green"),
-            }}
+            icon={{ source: Icon.SaveDocument, tintColor: getTintColor("green") }}
             onSubmit={handleSubmit}
           />
           <Action.Push
-            icon={{
-              source: Icon.Tag,
-              tintColor: getTintColor("turquoise"),
-            }}
-            target={<CreateTag />}
             title="Create Tag"
-            shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
+            icon={{ source: Icon.Tag, tintColor: getTintColor("turquoise") }}
+            target={<CreateEditTagForm />}
+            shortcut={Keyboard.Shortcut.Common.New}
           />
         </ActionPanel>
       }
     >
-      <Form.Description text={createdAt && !isDraft ? "Edit Note" : "Create New Note"} />
       <Form.TextField title="Title" placeholder="Note Title" {...itemProps.title} />
+      <Form.Dropdown title="Icon" info="Icon shown next to the note" {...itemProps.icon}>
+        {Object.keys(Icon).map((name) => (
+          <Form.Dropdown.Item key={name} value={name} title={name} icon={Icon[name as keyof typeof Icon]} />
+        ))}
+      </Form.Dropdown>
       <Form.TextArea title="Note" placeholder="Enter Markdown" enableMarkdown {...itemProps.note} />
-      <Form.TagPicker title="Tags" info="⌘+⇧+T = new tag" {...itemProps.tags}>
+      <Form.TagPicker title="Tags" {...itemProps.tags}>
         {tagStore.map((t, i) => (
           <Form.TagPicker.Item
             key={i}
@@ -184,6 +189,4 @@ const CreateEditNoteForm = ({
       </Form.TagPicker>
     </Form>
   );
-};
-
-export default CreateEditNoteForm;
+}

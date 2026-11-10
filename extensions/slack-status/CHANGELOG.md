@@ -1,5 +1,14 @@
 # Slack Status Change
 
+## [Fix Stable Preset IDs] - 2026-10-02
+
+- Use stable IDs for default presets so quicklinks survive storage resets
+- Improve the error message when a linked preset is not found
+
+## [Support pausing notifications] - 2024-12-17
+
+- Presets can now pause notifications for the duration of that status. You will be asked to reconnect your Slack account to get the right permissions.
+
 ## [Improve AI prompt] - 2024-06-18
 
 - Adjusted the AI prompt to improve chance of valid JSON response

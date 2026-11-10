@@ -1,17 +1,16 @@
-import { Action, ActionPanel, Icon, LaunchType, Toast, launchCommand, open, showToast } from "@raycast/api";
-import { MutatePromise, usePromise } from "@raycast/utils";
+import { Action, ActionPanel, Icon, LaunchType, Toast, launchCommand, open, showToast, Keyboard } from "@raycast/api";
+import { usePromise } from "@raycast/utils";
 
 import { getGitHubClient } from "../api/githubClient";
+import { RevalidateList } from "../helpers";
 import { getErrorMessage } from "../helpers/errors";
 import { getGitHubURL, getNotificationSubtitle, getNotificationTypeTitle } from "../helpers/notifications";
-import { NotificationsResponse } from "../notifications";
-
-export type Notification = NotificationsResponse["data"][0];
+import { NotificationWithIcon } from "../notifications";
 
 type NotificationActionsProps = {
-  notification: Notification;
+  notification: NotificationWithIcon;
   userId?: string;
-  mutateList: MutatePromise<Notification[] | undefined>;
+  mutateList: RevalidateList;
 };
 
 export default function NotificationActions({ notification, userId, mutateList }: NotificationActionsProps) {
@@ -26,7 +25,7 @@ export default function NotificationActions({ notification, userId, mutateList }
     await showToast({ style: Toast.Style.Animated, title: "Marking notification as read" });
 
     try {
-      await octokit.rest.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
+      await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
       await mutateList();
       await launchCommand({ name: "unread-notifications", type: LaunchType.UserInitiated });
 
@@ -43,6 +42,27 @@ export default function NotificationActions({ notification, userId, mutateList }
     }
   }
 
+  async function markNotificationAsDone() {
+    await showToast({ style: Toast.Style.Animated, title: "Marking notification as done" });
+
+    try {
+      await octokit.activity.markThreadAsDone({ thread_id: parseInt(notification.id) });
+      await mutateList();
+      await launchCommand({ name: "unread-notifications", type: LaunchType.UserInitiated });
+
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Marked notification as done",
+      });
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Failed marking notification as done",
+        message: getErrorMessage(error),
+      });
+    }
+  }
+
   async function openNotification(isUnreadNotification: boolean) {
     try {
       if (url) {
@@ -50,7 +70,7 @@ export default function NotificationActions({ notification, userId, mutateList }
       }
 
       if (isUnreadNotification) {
-        await octokit.rest.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
+        await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
         await mutateList();
       }
     } catch (error) {
@@ -64,13 +84,13 @@ export default function NotificationActions({ notification, userId, mutateList }
 
   async function acceptInvitation() {
     try {
-      const invitations = await octokit.rest.repos.listInvitationsForAuthenticatedUser();
+      const invitations = await octokit.repos.listInvitationsForAuthenticatedUser();
 
       const invitation = invitations.data.find(
         (invitation: { repository: { url: string } }) => invitation.repository.url === notification.repository.url,
       );
 
-      await octokit.rest.repos.acceptInvitationForAuthenticatedUser({
+      await octokit.repos.acceptInvitationForAuthenticatedUser({
         invitation_id: invitation?.id || 0,
       });
 
@@ -89,7 +109,7 @@ export default function NotificationActions({ notification, userId, mutateList }
     await showToast({ style: Toast.Style.Animated, title: "Marking all notifications as read" });
 
     try {
-      await octokit.rest.activity.markNotificationsAsRead();
+      await octokit.activity.markNotificationsAsRead();
       await mutateList();
       await launchCommand({ name: "unread-notifications", type: LaunchType.UserInitiated });
 
@@ -110,7 +130,7 @@ export default function NotificationActions({ notification, userId, mutateList }
     await showToast({ style: Toast.Style.Animated, title: "Unsubscribing" });
 
     try {
-      await octokit.rest.activity.deleteThreadSubscription({ thread_id: parseInt(notification.id) });
+      await octokit.activity.deleteThreadSubscription({ thread_id: parseInt(notification.id) });
       await mutateList();
 
       await showToast({
@@ -142,16 +162,29 @@ export default function NotificationActions({ notification, userId, mutateList }
           <Action
             title="Mark All as Read"
             icon={Icon.Circle}
-            shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
+            shortcut={{
+              macOS: { modifiers: ["cmd", "shift"], key: "enter" },
+              Windows: { modifiers: ["ctrl", "shift"], key: "enter" },
+            }}
             onAction={markAllNotificationsAsRead}
           />
         </>
       ) : null}
 
       <Action
+        title="Mark as Done"
+        icon={Icon.Circle}
+        onAction={markNotificationAsDone}
+        shortcut={{
+          macOS: { modifiers: ["cmd", "shift"], key: "d" },
+          Windows: { modifiers: ["ctrl", "shift"], key: "d" },
+        }}
+      />
+
+      <Action
         title="Unsubscribe"
         icon={Icon.BellDisabled}
-        shortcut={{ modifiers: ["cmd"], key: "." }}
+        shortcut={Keyboard.Shortcut.Common.Pin}
         onAction={unsubscribe}
       />
       <ActionPanel.Section>
@@ -159,14 +192,20 @@ export default function NotificationActions({ notification, userId, mutateList }
           <Action.CopyToClipboard
             content={url}
             title={`Copy ${getNotificationTypeTitle(notification)} URL`}
-            shortcut={{ modifiers: ["cmd", "shift"], key: "," }}
+            shortcut={{
+              macOS: { modifiers: ["cmd", "shift"], key: "," },
+              Windows: { modifiers: ["ctrl", "shift"], key: "," },
+            }}
           />
         ) : null}
 
         <Action.CopyToClipboard
           content={notification.subject.title}
           title={`Copy ${getNotificationTypeTitle(notification)} Title`}
-          shortcut={{ modifiers: ["cmd", "shift"], key: "," }}
+          shortcut={{
+            macOS: { modifiers: ["ctrl", "shift"], key: "," },
+            Windows: { modifiers: ["alt", "shift"], key: "," },
+          }}
         />
       </ActionPanel.Section>
       <ActionPanel.Section>
@@ -174,7 +213,7 @@ export default function NotificationActions({ notification, userId, mutateList }
           icon={Icon.ArrowClockwise}
           title="Refresh"
           onAction={mutateList}
-          shortcut={{ modifiers: ["cmd"], key: "r" }}
+          shortcut={Keyboard.Shortcut.Common.Refresh}
         />
       </ActionPanel.Section>
     </ActionPanel>

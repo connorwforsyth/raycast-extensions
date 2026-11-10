@@ -1,5 +1,15 @@
-import { Action, ActionPanel, Form, Icon, showToast, Toast, Clipboard, useNavigation } from "@raycast/api";
-import { FormValidation, useCachedPromise, useCachedState, useForm } from "@raycast/utils";
+import {
+  Action,
+  ActionPanel,
+  Form,
+  Icon,
+  showToast,
+  Toast,
+  Clipboard,
+  useNavigation,
+  getPreferenceValues,
+} from "@raycast/api";
+import { FormValidation, useForm } from "@raycast/utils";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -17,25 +27,27 @@ import { getUsers } from "../api/users";
 import { getProjectAvatar } from "../helpers/avatars";
 import { getErrorMessage } from "../helpers/errors";
 import { CustomFieldSchema, getCustomFieldsForCreateIssue } from "../helpers/issues";
+import { getIssueUrl } from "../helpers/urls";
 
 import FormParentDropdown from "./FormParentDropdown";
 import FormUserDropdown from "./FormUserDropdown";
 import IssueDetail from "./IssueDetail";
 import IssueFormCustomFields from "./IssueFormCustomFields";
+import { useJiraCachedPromise, useJiraCachedState } from "../hooks/useJiraCache";
 
 export type IssueFormValues = {
   projectId: string;
   issueTypeId: string;
   summary: string;
-  description: string;
-  parent: string;
-  assigneeId: string;
-  priorityId: string;
+  description?: string;
+  parent?: string;
+  assigneeId?: string;
+  priorityId?: string;
   labels?: string[];
   components?: string[];
   fixVersions?: string[];
   dueDate?: Date | null;
-  attachments: string[];
+  attachments?: string[];
 } & Record<string, unknown>;
 
 type CreateIssueFormProps = {
@@ -44,21 +56,22 @@ type CreateIssueFormProps = {
 };
 
 export default function CreateIssueForm({ draftValues, enableDrafts = true }: CreateIssueFormProps) {
+  const { copyURLtoClipboard } = getPreferenceValues<Preferences.CreateIssue>();
   const { push } = useNavigation();
 
   const [projectQuery, setProjectQuery] = useState("");
-  const { data: projects, isLoading: isLoadingProjects } = useCachedPromise(
+  const { data: projects, isLoading: isLoadingProjects } = useJiraCachedPromise(
     (query) => getProjects(query),
     [projectQuery],
     { keepPreviousData: true },
   );
 
-  const { data: users } = useCachedPromise(() => getUsers());
-  const { data: labels } = useCachedPromise(() => getLabels());
+  const { data: users } = useJiraCachedPromise(() => getUsers(), []);
+  const { data: labels } = useJiraCachedPromise(() => getLabels(), []);
 
   // There's a slight jump on issue types when launching the command since they're
   // retrieved based on the project. Let's cache the last project ID to avoid that
-  const [lastProject, setLastProject] = useCachedState<string>("last-project");
+  const [lastProject, setLastProject] = useJiraCachedState<string>("last-project");
 
   const [customFieldInitialValues, setCustomFieldInitialValues] = useState({});
   const [customFieldsValidation, setCustomFieldsValidation] = useState({});
@@ -67,12 +80,16 @@ export default function CreateIssueForm({ draftValues, enableDrafts = true }: Cr
     async onSubmit(values) {
       const toast = await showToast({ style: Toast.Style.Animated, title: "Creating issue" });
 
+      function getNewIssueURL(key: string) {
+        return getIssueUrl(key);
+      }
+
       try {
         const issue = await createIssue(values, { customFields: selectedIssueType?.fields });
 
         if (issue) {
           toast.style = Toast.Style.Success;
-          toast.title = `Created issue • ${issue.key}`;
+          toast.title = `Created issue • ${issue.key} ` + (copyURLtoClipboard ? "(URL copied)" : "");
           toast.primaryAction = {
             title: "Open Issue",
             shortcut: { modifiers: ["shift", "cmd"], key: "o" },
@@ -86,6 +103,9 @@ export default function CreateIssueForm({ draftValues, enableDrafts = true }: Cr
               showToast({ style: Toast.Style.Success, title: "Copied to clipboard", message: issue.key });
             },
           };
+          if (copyURLtoClipboard) {
+            await Clipboard.copy(getNewIssueURL(issue.key));
+          }
 
           reset({
             projectId: values.projectId,
@@ -105,7 +125,7 @@ export default function CreateIssueForm({ draftValues, enableDrafts = true }: Cr
 
           focus("summary");
 
-          if (values.attachments.length > 0) {
+          if (values.attachments && values.attachments.length > 0) {
             const attachmentWord = values.attachments.length === 1 ? "attachment" : "attachments";
             try {
               toast.message = `Uploading ${attachmentWord}…`;
@@ -147,7 +167,7 @@ export default function CreateIssueForm({ draftValues, enableDrafts = true }: Cr
     setLastProject(values.projectId);
   }, [values.projectId]);
 
-  const { data: issueMetadataSummary } = useCachedPromise(
+  const { data: issueMetadataSummary } = useJiraCachedPromise(
     (projectId) => getCreateIssueMetadataSummary(projectId),
     [values.projectId],
     { execute: !!values.projectId },
@@ -159,7 +179,7 @@ export default function CreateIssueForm({ draftValues, enableDrafts = true }: Cr
   // It's safe to assume the issue types will always correspond to the first element
   const issueTypesSummary = issueMetadataSummary?.[0]?.issuetypes;
 
-  const { data: issueMetadata } = useCachedPromise(
+  const { data: issueMetadata } = useJiraCachedPromise(
     (projectId, issueTypeId) => getCreateIssueMetadata(projectId, issueTypeId),
     [values.projectId, values.issueTypeId],
     { execute: !!values.projectId && !!values.issueTypeId },

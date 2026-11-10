@@ -1,0 +1,109 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "cheatsheets-remastered",
+  "title": "Cheatsheets Remastered",
+  "description": "Browse bundled developer references, personal Markdown and synced GitHub cheatsheets offline. Search, favorite and organize your sheets.",
+  "icon": "logo.png",
+  "author": "smcnab1",
+  "contributors": [],
+  "categories": [
+    "Documentation",
+    "Developer Tools",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "show-cheatsheets",
+      "title": "Show Cheatsheets",
+      "subtitle": "Cheatsheets Remastered",
+      "description": "List all cheatsheets",
+      "mode": "view"
+    },
+    {
+      "name": "create-custom-cheatsheet",
+      "title": "Create Custom Cheatsheet",
+      "subtitle": "Cheatsheets Remastered",
+      "description": "Create a new custom cheatsheet",
+      "mode": "view"
+    },
+    {
+      "name": "manage-custom-cheatsheets",
+      "title": "Manage Custom Cheatsheets",
+      "subtitle": "Cheatsheets Remastered",
+      "description": "View, edit, and manage your custom cheatsheets",
+      "mode": "view"
+    },
+    {
+      "name": "manage-repos",
+      "title": "Repo Manager",
+      "subtitle": "Cheatsheets Remastered",
+      "description": "Add GitHub repositories and sync Markdown for offline access",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "githubToken",
+      "type": "password",
+      "required": false,
+      "title": "GitHub Token (optional)",
+      "description": "Retained for compatibility. Repository sync uses GitHub OAuth; this preference does not override it."
+    },
+    {
+      "name": "defaultSort",
+      "type": "dropdown",
+      "required": true,
+      "title": "Default Sort Order",
+      "description": "How to sort cheatsheets by default",
+      "default": "frecency",
+      "data": [
+        {
+          "title": "Frecency (Smart)",
+          "value": "frecency"
+        },
+        {
+          "title": "Last Viewed",
+          "value": "lastViewed"
+        },
+        {
+          "title": "Most Viewed",
+          "value": "mostViewed"
+        },
+        {
+          "title": "Alphabetical",
+          "value": "alpha"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.11.0",
+    "@raycast/utils": "^2.3.3",
+    "axios": "^1.6.0",
+    "proper-lockfile": "^4.1.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "^26.6.6",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/react": "^19.3.0",
+    "eslint": "^10.13.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "build": "ray build -e dist -o dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish",
+    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "check-format": "prettier --check src tests package.json eslint.config.js tsconfig*.json docs README.md CHANGELOG.md ATTRIBUTION.md"
+  }
+}

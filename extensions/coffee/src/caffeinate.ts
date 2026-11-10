@@ -1,5 +1,7 @@
-import { startCaffeinate } from "./utils";
+import { startCaffeinate, getSchedule, changeScheduleState, deviceName } from "./utils";
 
 export default async () => {
-  await startCaffeinate({ menubar: true, status: true }, "Your Mac is now caffeinated");
+  const schedule = await getSchedule();
+  if (schedule != undefined) await changeScheduleState("decaffeinate", schedule);
+  await startCaffeinate({ menubar: true, status: true }, `Your ${deviceName()} is now caffeinated`);
 };

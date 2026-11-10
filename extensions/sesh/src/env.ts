@@ -1,1 +1,25 @@
-export const env = Object.assign({}, process.env, { PATH: "/usr/local/bin:/usr/bin:/opt/homebrew/bin" });
+import { getPreferenceValues } from "@raycast/api";
+
+export function getEnv() {
+  const { environmentPath } = getPreferenceValues<
+    | Preferences.CmdConnect
+    | Preferences.CmdConnectWindow
+    | Preferences.CmdSearch
+    | Preferences.CmdConnectBrowserWorktree
+  >();
+
+  const patchedWithoutDuplicates = new Set([
+    ...(process.env.PATH?.split(":") ?? []),
+    ...(environmentPath?.split(":") ?? []),
+  ]);
+
+  const pathString = Array.from(patchedWithoutDuplicates).join(":");
+
+  const env = Object.assign({}, process.env, {
+    PATH: pathString,
+    LANG: "en_US.UTF-8",
+    LC_ALL: "en_US.UTF-8",
+  });
+
+  return env;
+}

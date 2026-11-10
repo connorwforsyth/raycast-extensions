@@ -2,7 +2,7 @@ import { Customer } from "../customers/types";
 import { Project } from "../projects/types";
 import { Task } from "../tasks/types";
 import { User } from "../user/types";
-import { StatusType } from "../utils/storage";
+import { StatusType } from "../../utils/storage";
 
 export type Activity = {
   id: number;
@@ -21,9 +21,25 @@ export type Activity = {
   task: Task;
   customer: Customer;
   user: User;
-  hourly_rate: number;
+  hourly_rate?: number;
   timer_started_at: string | null;
   created_at: string;
   updated_at: string;
   status?: StatusType;
+};
+
+// hours: "" starts a timer, a number logs that many hours.
+export type StartActivityRequest = {
+  date: string;
+  description: string;
+  hours: number | "";
+  projectID?: number | null;
+  taskID: number;
+};
+
+// Only the given fields are sent to MOCO.
+export type EditActivityRequest = {
+  date?: string;
+  description?: string;
+  hours?: number;
 };

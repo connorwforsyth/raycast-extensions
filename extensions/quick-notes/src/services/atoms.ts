@@ -1,10 +1,12 @@
 import { atom } from "jotai";
+import { atomWithReset, RESET } from "jotai/utils";
+import { Icon } from "@raycast/api";
 import { TAGS_FILE_PATH, TODO_FILE_PATH, preferences } from "./config";
-import fs from "fs";
+import fs from "node:fs";
 import {
   deleteNotesInFolder,
   exportNotes,
-  getDeletedNote,
+  getDeletedNotes,
   getDeletedTags,
   getInitialValuesFromFile,
   getOldRenamedTitles,
@@ -12,9 +14,11 @@ import {
 
 export interface Note {
   title: string;
+  icon?: string;
   body: string;
   tags: string[];
   is_draft: boolean;
+  summary?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,14 +28,23 @@ export interface Tag {
   color: string;
 }
 
-export const sortArr = ["created", "updated", "alphabetical", "tags"] as const;
+export const sortOptions = {
+  created: { title: "Created At", icon: Icon.Clock },
+  updated: { title: "Updated At", icon: Icon.Pencil },
+  alphabetical: { title: "Alphabetical", icon: Icon.Text },
+  tags: { title: "Tags", icon: Icon.Tag },
+} as const;
 
-export type Sort = (typeof sortArr)[number];
+export type Sort = keyof typeof sortOptions;
 
-const notes = atom<Note[]>(getInitialValuesFromFile(TODO_FILE_PATH) as Note[]);
+const notes = atomWithReset<Note[]>(getInitialValuesFromFile(TODO_FILE_PATH) as Note[]);
 export const notesAtom = atom(
   async (get) => get(notes),
-  async (get, set, newNotes: Note[]) => {
+  async (get, set, newNotes: Note[] | typeof RESET) => {
+    if (newNotes === RESET) {
+      set(notes, getInitialValuesFromFile(TODO_FILE_PATH) as Note[]);
+      return;
+    }
     /**
      * Autosave deletion logic
      * - If a note is renamed, delete the old note file as title is the filename
@@ -46,10 +59,13 @@ export const notesAtom = atom(
           console.error(`Error deleting note: ${e}`);
         }
       }
-      const deletedNote = getDeletedNote(get(notes), newNotes);
-      if (deletedNote) {
+      const deletedNotes = getDeletedNotes(get(notes), newNotes);
+      if (deletedNotes.length > 0) {
         try {
-          await deleteNotesInFolder(preferences.fileLocation, [deletedNote.title]);
+          await deleteNotesInFolder(
+            preferences.fileLocation,
+            deletedNotes.map((note) => note.title),
+          );
         } catch (e) {
           console.error(`Error deleting note: ${e}`);
         }

@@ -6,7 +6,9 @@
   "icon": "icon.png",
   "author": "pernielsentikaer",
   "contributors": [
-    "Abdulaziz-Aljadaan"
+    "aljadan",
+    "xmok",
+    "0xdhrv"
   ],
   "categories": [
     "Fun"
@@ -20,19 +22,30 @@
       "mode": "view"
     }
   ],
+  "tools": [
+    {
+      "name": "get-random-joke",
+      "title": "Get Random Dad Joke",
+      "description": "Fetch a random dad joke to share with the user"
+    },
+    {
+      "name": "search-jokes",
+      "title": "Search Dad Jokes",
+      "description": "Search for dad jokes matching a topic or keyword"
+    }
+  ],
   "dependencies": {
-    "@raycast/api": "^1.41.1",
-    "@raycast/utils": "^1.4.9"
+    "@raycast/api": "^1.104.24",
+    "@raycast/utils": "^2.3.0"
   },
   "devDependencies": {
-    "@types/node": "16.10.3",
-    "@types/react": "18.0.9",
-    "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
-    "eslint": "^7.32.0",
-    "eslint-config-prettier": "^8.3.0",
-    "prettier": "^2.5.1",
-    "typescript": "^4.4.3"
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.0.10",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "react": "^19.2.8",
+    "typescript": "^5.8.3"
   },
   "scripts": {
     "build": "ray build -e dist",
@@ -40,5 +53,9 @@
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
     "publish": "ray publish"
-  }
+  },
+  "platforms": [
+    "macOS",
+    "Windows"
+  ]
 }

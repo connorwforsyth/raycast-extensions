@@ -1,6 +1,7 @@
-import { useCachedPromise, withAccessToken } from "@raycast/utils";
-import { getClubActivities, getClubs, provider } from "./api/client";
-import { useEffect, useState } from "react";
+import { withStrava } from "./with-strava";
+import { useCachedPromise, useLocalStorage } from "@raycast/utils";
+import { getClubActivities, getClubs } from "./api/client";
+import { useEffect } from "react";
 import { Action, ActionPanel, Color, Icon, List, Toast, showToast } from "@raycast/api";
 import { formatDistance, formatDuration, getSportTypesFromActivityTypes, getStartOfWeekUnix } from "./utils";
 import { StravaClubActivity, StravaSummaryClub } from "./api/types";
@@ -11,7 +12,7 @@ const PAGE_SIZE = 100;
 
 function withClubs(Component: React.FC<{ clubs: StravaSummaryClub[] }>) {
   return function ClubsWrapper() {
-    const { data: clubs, isLoading, error } = useCachedPromise(getClubs, []);
+    const { data: clubs, isLoading, error, revalidate } = useCachedPromise(getClubs, []);
 
     useEffect(() => {
       if (error) {
@@ -27,10 +28,18 @@ function withClubs(Component: React.FC<{ clubs: StravaSummaryClub[] }>) {
       return <List isLoading searchBarPlaceholder={SEARCHBAR_PLACEHOLDER} />;
     }
 
-    if (clubs === undefined) {
+    if (!clubs?.length) {
       return (
         <List>
-          <List.EmptyView title="No clubs found" />
+          <List.EmptyView
+            title={error ? "Could Not Load Clubs" : "No Clubs Found"}
+            description={error?.message}
+            actions={
+              <ActionPanel>
+                <Action title="Retry" icon={Icon.ArrowClockwise} onAction={revalidate} />
+              </ActionPanel>
+            }
+          />
         </List>
       );
     }
@@ -39,7 +48,7 @@ function withClubs(Component: React.FC<{ clubs: StravaSummaryClub[] }>) {
   };
 }
 
-type AthleteActivities = {
+export type AthleteActivities = {
   [key: string]: {
     name: string;
     elapsed_time: number;
@@ -50,7 +59,8 @@ type AthleteActivities = {
 };
 
 function Leaderboard({ clubs }: { clubs: StravaSummaryClub[] }) {
-  const [clubId, setClubId] = useState(clubs[0].id.toString());
+  const { value, setValue: setClubId } = useLocalStorage("lastClubId", clubs[0].id.toString());
+  const clubId = value || "";
 
   const startOfWeek = getStartOfWeekUnix();
   const weekString = `${new Date(startOfWeek * 1000).toLocaleDateString("en-US", {
@@ -65,6 +75,7 @@ function Leaderboard({ clubs }: { clubs: StravaSummaryClub[] }) {
     error,
   } = useCachedPromise(
     (club: string) => async (options: { page: number }) => {
+      if (!club) return { data: [], hasMore: false };
       const newData = await getClubActivities(club, options.page + 1, PAGE_SIZE, startOfWeek);
       return { data: newData, hasMore: newData.length === PAGE_SIZE };
     },
@@ -214,4 +225,4 @@ function ClubActivities({ activities }: { activities: StravaClubActivity[] }) {
   );
 }
 
-export default withAccessToken(provider)(withClubs(Leaderboard));
+export default withStrava(withClubs(Leaderboard));

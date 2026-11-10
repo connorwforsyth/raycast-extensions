@@ -1,58 +1,151 @@
 # Slack
 
+This Raycast extension is the perfect companion for Slack users. It allows you to:
+
+- Quickly open Slack channels
+- Search for messages
+- Mention workspace members and channels in AI Chat
+- See unread messages,
+- Snooze notifications
+- Set your presence status
+- Set your status
+
+## Set your status from a deep link
+
+The **Set Status** command accepts two optional arguments, `statusText` and `emoji`, so you can build a deep link (or a [Quicklink](https://manual.raycast.com/quicklinks)) that sets your status in one step:
+
+```
+raycast://extensions/mommertf/slack/set-status?arguments=%7B%22statusText%22%3A%22Lunch%22%2C%22emoji%22%3A%22%3Ahamburger%3A%22%7D
+```
+
+The `arguments` query parameter is a URL-encoded JSON object, for example:
+
+```json
+{ "statusText": "Lunch", "emoji": ":hamburger:" }
+```
+
+- Either argument may be omitted; only the one you provide is changed.
+- `emoji` accepts a Slack emoji name with or without colons (`hamburger` or `:hamburger:`).
+
+Statuses set this way don't auto-expire. To pick an expiration, open the command and use the **Set New Status** form.
+
 ## How to get an access token?
+
+If you don't want to log in through OAuth, you can use an access token instead. Here's how to get one:
 
 1. Open https://api.slack.com/apps/
 2. Click Button `Create New App`
 3. Select `From an app manifest`
 4. Select a workspace to which you want to grant the extension access.
-5. Copy and paste the following manifest (Select `YAML`):  
+5. Copy and paste the following manifest (Select `YAML`):
    _Feel free to exclude permission scope groups - see comments - if you don't want to have the full experience of this extension._
 
-    ```
-    display_information:
-      name: Raycast - Slack
-    oauth_config:
-      scopes:
-        user:
-          # Command: Search & Unread Messages & Set Presence
-          - users:read
+   ```
+   display_information:
+     name: Raycast - Slack
 
-          # Command: Search & Unread Messages
-          - channels:read
-          - groups:read
-          - im:read
-          - mpim:read
+   oauth_config:
+     scopes:
+       user:
+         # Command: Search & Unread Messages & Set Presence
+         - users:read
 
-          # Command: Unread Messages
-          - channels:history
-          - groups:history
-          - im:history
-          - mpim:history
+         # Command: Search & Unread Messages
+         - channels:read
+         - groups:read
+         - im:read
+         - mpim:read
 
-          # Command: Unread Messages (optional - needed for marking conversations as read)
-          - channels:write
-          - groups:write
-          - im:write
-          - mpim:write
+         # Command: Search
+         - search:read
 
-          # Command: Set Presence
-          - users:write
+         # Command: Unread Messages
+         - channels:history
+         - groups:history
+         - im:history
+         - mpim:history
 
-          # Command: Set Snooze
-          - dnd:read
-          - dnd:write
-    settings:
-      org_deploy_enabled: false
-      socket_mode_enabled: false
-      token_rotation_enabled: false
-    ```
+         # Command: Unread Messages (optional - needed for marking conversations as read)
+         - channels:write
+         - groups:write
+
+         # Command: Unread Messages (optional - needed for marking conversations as read)
+         # AI Tool: Send Message (needed to open a DM from a user ID)
+         - im:write
+         - mpim:write
+
+         # Command: Set Presence
+         - users:write
+
+         # Command: Set Snooze
+         - dnd:read
+         - dnd:write
+
+         # Command & AI Tool: Send Message
+         - chat:write
+
+         # AI Tool: Upload Files
+         - files:write
+
+         # AI Tool: Download Files
+         # Command: Search Messages (Download Attachment)
+         - files:read
+
+         # Command: Search Emojis
+         - emoji:read
+
+         # AI Tool: Add Reaction
+         - reactions:write
+
+         # AI Tools: Read Canvas & Edit Canvas
+         - canvases:read
+         - canvases:write
+
+         # Command: Set Status
+         - users.profile:write
+         - users.profile:read
+
+   settings:
+     org_deploy_enabled: false
+     socket_mode_enabled: false
+     token_rotation_enabled: false
+   ```
 
 6. Confirm creation of app
 7. Press `Install to Workspace`
-8. Get your personal access token from `Features -> OAuth & Permissions` (section `OAuth Tokens for Your Workspace`).  
+8. Get your personal access token from `Features -> OAuth & Permissions` (section `OAuth Tokens for Your Workspace`).
    Your personal access token will start with `xoxp-`.
 
-## Validate your Slack API Token after extension updates
+## Proxy Support
 
-After extension updates in which new features were introduced you might be kindly asked for validating the permission scopes of your Slack API Token. If they differ from those scopes that are mentioned in this README your action is required: To get the extension running again you need to update the permission scopes of your existing Slack API Token or create a completely new Token by following the instructions above.
+If you are behind a corporate proxy, you can configure the extension to route Slack API requests through it.
+
+### Configuration
+
+The proxy URL is resolved in the following order:
+
+1. **Raycast preference** — set the "Proxy URL" field in the extension settings (e.g. `http://proxy.example.com:8080`)
+2. **`HTTPS_PROXY` environment variable**
+3. **`HTTP_PROXY` environment variable**
+
+### Important Notes
+
+- Proxy support applies to **Slack API calls only**. The OAuth login flow uses Raycast's built-in networking, which does not go through the configured proxy.
+- If you are on a corporate network that blocks OAuth, use a **personal access token** instead (see above). Token-based authentication bypasses OAuth entirely and all subsequent API calls will use the proxy.
+
+## Slack API rate limits
+
+Slack applies Web API rate limits **per API method, per workspace, per app**, using one-minute windows. The published tier number is a guaranteed floor rather than a fixed maximum; Slack allows some bursts and may change the exact allowance. Signing in again or clearing Raycast's extension cache does not reset these workspace-level app limits.
+
+The limits most relevant to this extension are:
+
+| Extension operation                     | Slack method                                                                         | Published limit                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Search workspace members                | [`users.list`](https://docs.slack.dev/reference/methods/users.list/)                 | Tier 2: 20+ requests per minute                                                  |
+| Search channels and group conversations | [`conversations.list`](https://docs.slack.dev/reference/methods/conversations.list/) | Tier 2: 20+ requests per minute                                                  |
+| Search messages                         | [`search.messages`](https://docs.slack.dev/reference/methods/search.messages/)       | Tier 2: 20+ requests per minute                                                  |
+| Send messages                           | [`chat.postMessage`](https://docs.slack.dev/reference/methods/chat.postMessage/)     | Special: generally 1 message per second per channel, plus a workspace-wide limit |
+
+`users.list` and `conversations.list` are cursor-paginated, and every page is another request against that method's rate limit. Directory loading and search use Slack's recommended 200-item page size. User search scans `users.list` once, keeping a compact copy of the member list in memory and in Raycast's `Cache` (fresh for one hour, reusable for up to a day while it refreshes in the background), so later searches make no member requests. Pages are searched as they arrive, so matches appear without waiting for the whole workspace. Timeouts and server errors stop retrying after a few attempts so they surface instead of loading forever.
+
+When a limit is exceeded, Slack responds with HTTP `429` and a `Retry-After` header containing the number of seconds to wait. The extension waits and retries automatically without showing a toast, including during AI tool calls, except for Canvas tools, which return the wait time without retrying. Although Slack applies limits per method, the Slack SDK pauses this client's request queue during the retry delay. See [Slack's rate-limit overview](https://docs.slack.dev/apis/web-api/rate-limits/) for the full tier definitions and current policy.

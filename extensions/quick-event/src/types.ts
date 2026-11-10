@@ -1,3 +1,5 @@
+import { TimezoneInfo } from './timezones';
+
 export interface CalendarEvent {
   id: string;
   eventTitle?: string | null;
@@ -5,4 +7,7 @@ export interface CalendarEvent {
   endDate: Date;
   isAllDay: boolean;
   validated: boolean;
+  location?: string;
+  timezone?: TimezoneInfo | null;
+  reminders?: number[];
 }

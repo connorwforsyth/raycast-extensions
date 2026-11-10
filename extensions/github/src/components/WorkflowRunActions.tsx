@@ -1,7 +1,7 @@
-import { Action, ActionPanel, Icon, List, showToast, Toast } from "@raycast/api";
-import { MutatePromise } from "@raycast/utils";
+import { Action, ActionPanel, Icon, List, showToast, Toast, Keyboard } from "@raycast/api";
 
 import { getGitHubClient } from "../api/githubClient";
+import { RevalidateList } from "../helpers";
 import { getErrorMessage } from "../helpers/errors";
 import { WorkflowRunsResponse } from "../workflow-runs";
 
@@ -10,7 +10,7 @@ export type WorkflowRun = WorkflowRunsResponse["data"]["workflow_runs"][0];
 type WorkflowRunActionsProps = {
   workflowRun: WorkflowRun;
   repository: string;
-  mutateList: MutatePromise<WorkflowRunsResponse | undefined>;
+  mutateList: RevalidateList;
 };
 
 export function WorkflowRunActions({ workflowRun, repository, mutateList }: WorkflowRunActionsProps) {
@@ -39,7 +39,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
     await showToast({ style: Toast.Style.Animated, title: "Sending re-run request" });
 
     try {
-      await octokit.rest.actions.reRunWorkflow({ run_id: workflowRun.id, owner, repo });
+      await octokit.actions.reRunWorkflow({ run_id: workflowRun.id, owner, repo });
 
       await mutateList();
 
@@ -61,7 +61,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
     await showToast({ style: Toast.Style.Animated, title: "Sending re-run workflow failed jobs request" });
 
     try {
-      await octokit.rest.actions.reRunWorkflowFailedJobs({ run_id: workflowRun.id, owner, repo });
+      await octokit.actions.reRunWorkflowFailedJobs({ run_id: workflowRun.id, owner, repo });
 
       await mutateList();
 
@@ -83,7 +83,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
     await showToast({ style: Toast.Style.Animated, title: "Sending cancel request" });
 
     try {
-      await octokit.rest.actions.cancelWorkflowRun({ run_id: workflowRun.id, owner, repo });
+      await octokit.actions.cancelWorkflowRun({ run_id: workflowRun.id, owner, repo });
 
       await mutateList();
 
@@ -105,7 +105,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
     await showToast({ style: Toast.Style.Animated, title: "Deleting Run" });
 
     try {
-      await octokit.rest.actions.deleteWorkflowRun({ run_id: workflowRun.id, owner, repo });
+      await octokit.actions.deleteWorkflowRun({ run_id: workflowRun.id, owner, repo });
 
       await mutateList();
 
@@ -127,15 +127,18 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
       <Action.OpenInBrowser url={workflowRun.html_url} />
 
       {workflowRun.status === "completed" ? (
-        <Action title="Re-Run Workflow" icon={Icon.Clock} onAction={rerunWorkflow} />
+        <Action title="Rerun Workflow" icon={Icon.Clock} onAction={rerunWorkflow} />
       ) : null}
 
       {workflowRun.status === "completed" && workflowRun.conclusion !== "success" ? (
         <Action
-          title="Re-Run Workflow Failed Jobs"
+          title="Rerun Workflow Failed Jobs"
           icon={Icon.Redo}
           onAction={rerunWorkflowFailedJobs}
-          shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+          shortcut={{
+            macOS: { modifiers: ["cmd", "shift"], key: "f" },
+            Windows: { modifiers: ["ctrl", "shift"], key: "f" },
+          }}
         />
       ) : null}
 
@@ -148,7 +151,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
         title="Delete Run"
         style={Action.Style.Destructive}
         onAction={deleteRun}
-        shortcut={{ modifiers: ["ctrl"], key: "x" }}
+        shortcut={Keyboard.Shortcut.Common.Remove}
       />
 
       <ActionPanel.Section>
@@ -156,7 +159,7 @@ export function WorkflowRunActions({ workflowRun, repository, mutateList }: Work
           icon={Icon.ArrowClockwise}
           title="Refresh"
           onAction={mutateList}
-          shortcut={{ modifiers: ["cmd"], key: "r" }}
+          shortcut={Keyboard.Shortcut.Common.Refresh}
         />
       </ActionPanel.Section>
     </ActionPanel>

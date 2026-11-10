@@ -1,8 +1,9 @@
 import { Action, ActionPanel, List, Icon, Color } from "@raycast/api";
 import { Activity } from "../types";
-import { toggleActivity, deleteActivity } from "../api";
+import { toggleActivity } from "../api";
+import { confirmAndDeleteActivity } from "../confirmAndDelete";
 import { ActivityEdit } from "./ActivityEdit";
-import { timeDelta, secondsParser } from "../utils";
+import { timeDelta, secondsParser, localDate } from "../utils";
 import { Actions } from "./ActivityList";
 import { useState, useEffect } from "react";
 
@@ -14,7 +15,7 @@ interface Props {
 
 export const ActivityListItem: React.FC<Props> = ({ index, activity, modifyActivity }) => {
   const [time, setTime] = useState<number>(
-    activity.timer_started_at !== null ? activity.seconds + timeDelta(activity.timer_started_at) : activity.seconds
+    activity.timer_started_at !== null ? activity.seconds + timeDelta(activity.timer_started_at) : activity.seconds,
   );
   const [parsedTime, setParsedTime] = useState<string>(secondsParser(time));
   const refreshTime = () => {
@@ -66,7 +67,7 @@ export const ActivityListItem: React.FC<Props> = ({ index, activity, modifyActiv
       }
       actions={
         <ActionPanel>
-          {activity.date === new Date().toISOString().split("T")[0] ? (
+          {activity.date === localDate() ? (
             <Action
               icon={
                 activity.timer_started_at === null
@@ -74,33 +75,35 @@ export const ActivityListItem: React.FC<Props> = ({ index, activity, modifyActiv
                   : { source: Icon.Stop, tintColor: Color.Red }
               }
               title={`${activity.timer_started_at === null ? "Start" : "Stop"} timer`}
-              onAction={() =>
-                toggleActivity(activity.id, activity.timer_started_at === null).then(() =>
+              onAction={async () => {
+                if ((await toggleActivity(activity.id, activity.timer_started_at === null)) === true) {
                   modifyActivity(
                     index,
                     {
                       ...activity,
                       timer_started_at: activity.timer_started_at === null ? new Date().toISOString() : null,
                     },
-                    Actions.update
-                  )
-                )
-              }
+                    Actions.update,
+                  );
+                }
+              }}
             />
           ) : null}
           <Action.Push
             icon={{ source: Icon.Pencil, tintColor: Color.Blue }}
             title={"Edit Activity"}
             target={<ActivityEdit index={index} activity={activity} modifyActivity={modifyActivity} />}
-            {...(activity.date === new Date().toISOString().split("T")[0]
-              ? { shortcut: { modifiers: ["cmd"], key: "e" } }
-              : null)}
+            {...(activity.date === localDate() ? { shortcut: { modifiers: ["cmd"], key: "e" } } : null)}
           />
           {activity.timer_started_at === null ? (
             <Action
               icon={{ source: Icon.Trash, tintColor: Color.Red }}
               title="Delete"
-              onAction={() => deleteActivity(activity.id).then(() => modifyActivity(index, activity, Actions.delete))}
+              onAction={async () => {
+                if (await confirmAndDeleteActivity(activity)) {
+                  modifyActivity(index, activity, Actions.delete);
+                }
+              }}
               shortcut={{ modifiers: ["cmd"], key: "d" }}
             />
           ) : null}

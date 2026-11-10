@@ -1,26 +1,29 @@
 import {
   Color,
+  getPreferenceValues,
   Icon,
+  Image,
+  launchCommand,
   LaunchType,
   MenuBarExtra,
-  Toast,
-  getPreferenceValues,
-  launchCommand,
   open,
   openCommandPreferences,
   openExtensionPreferences,
   showToast,
+  Toast,
+  Keyboard,
 } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
+import { useMemo } from "react";
 
 import { getGitHubClient } from "./api/githubClient";
-import { Notification } from "./components/NotificationListItem";
 import {
   getGitHubIcon,
   getGitHubURL,
   getNotificationIcon,
   getNotificationSubtitle,
   getNotificationTooltip,
+  Notification,
 } from "./helpers/notifications";
 import { withGitHubClient } from "./helpers/withGithubClient";
 import { useViewer } from "./hooks/useViewer";
@@ -32,10 +35,35 @@ function UnreadNotifications() {
 
   const viewer = useViewer();
 
+  const repositoryListArray = useMemo(() => {
+    if (!preferences.repositoryList) return [];
+    return preferences.repositoryList
+      .split(",")
+      .map((repo) => repo.trim())
+      .filter((repo) => repo.length > 0);
+  }, [preferences.repositoryList]);
+
   const { data, isLoading, mutate } = useCachedPromise(async () => {
-    const response = await octokit.rest.activity.listNotificationsForAuthenticatedUser();
+    const notificationsPage = await octokit.paginate(octokit.activity.listNotificationsForAuthenticatedUser, {
+      per_page: 50,
+    });
+    let notifications = notificationsPage;
+
+    if (preferences.repositoryFilterMode !== "all" && repositoryListArray.length > 0) {
+      if (preferences.repositoryFilterMode === "include") {
+        notifications = notifications.filter((notification) =>
+          repositoryListArray.some((repo) => repo.toLowerCase() === notification.repository.full_name.toLowerCase()),
+        );
+      } else {
+        notifications = notifications.filter(
+          (notification) =>
+            !repositoryListArray.some((repo) => repo.toLowerCase() === notification.repository.full_name.toLowerCase()),
+        );
+      }
+    }
+
     return Promise.all(
-      response.data.map(async (notification: Notification) => {
+      notifications.map(async (notification: Notification) => {
         const icon = await getNotificationIcon(notification);
         return { ...notification, icon };
       }),
@@ -46,7 +74,7 @@ function UnreadNotifications() {
 
   async function markAllNotificationsAsRead() {
     try {
-      await mutate(octokit.rest.activity.markNotificationsAsRead(), {
+      await mutate(octokit.activity.markNotificationsAsRead(), {
         optimisticUpdate() {
           return [];
         },
@@ -64,7 +92,7 @@ function UnreadNotifications() {
           open(`${notification.repository.html_url}/invitations`);
         } else {
           await open(await getGitHubURL(notification, viewer?.id));
-          await octokit.rest.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
+          await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
         }
       };
 
@@ -80,7 +108,7 @@ function UnreadNotifications() {
 
   async function markNotificationAsRead(notification: Notification) {
     try {
-      await mutate(octokit.rest.activity.markThreadAsRead({ thread_id: parseInt(notification.id) }), {
+      await mutate(octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) }), {
         optimisticUpdate(data) {
           return data?.filter((n: Notification) => n.id !== notification.id) ?? [];
         },
@@ -103,13 +131,13 @@ function UnreadNotifications() {
       <MenuBarExtra.Item
         icon={getGitHubIcon()}
         title="Open GitHub Notifications"
-        shortcut={{ modifiers: ["cmd"], key: "o" }}
+        shortcut={Keyboard.Shortcut.Common.Open}
         onAction={() => open("https://github.com/notifications")}
       />
 
       <MenuBarExtra.Section>
         {hasUnread ? (
-          data.map((notification) => {
+          data.map((notification: Notification & { icon: { value: Image; tooltip: string } }) => {
             const title = notification.subject.title;
             const updatedAt = new Date(notification.updated_at);
             const tooltip = getNotificationTooltip(updatedAt);
@@ -143,21 +171,27 @@ function UnreadNotifications() {
           <MenuBarExtra.Item
             title="Mark All as Read"
             icon={Icon.Checkmark}
-            shortcut={{ /* gmail uses shift-i to mark as read */ modifiers: ["cmd"], key: "i" }}
+            shortcut={{
+              macOS: { modifiers: ["cmd"], key: "i" },
+              Windows: { modifiers: ["ctrl"], key: "i" },
+            }}
             onAction={markAllNotificationsAsRead}
           />
         ) : null}
         <MenuBarExtra.Item
           title="View All Notifications"
           icon={Icon.Eye}
-          shortcut={{ modifiers: ["cmd", "shift"], key: "o" }}
+          shortcut={Keyboard.Shortcut.Common.OpenWith}
           onAction={() => launchCommand({ name: "notifications", type: LaunchType.UserInitiated })}
         />
 
         <MenuBarExtra.Item
           title="Configure Command"
           icon={Icon.Gear}
-          shortcut={{ modifiers: ["cmd"], key: "," }}
+          shortcut={{
+            macOS: { modifiers: ["cmd"], key: "," },
+            Windows: { modifiers: ["ctrl"], key: "," },
+          }}
           onAction={openCommandPreferences}
           alternate={
             <MenuBarExtra.Item title="Configure Extension" icon={Icon.Gear} onAction={openExtensionPreferences} />

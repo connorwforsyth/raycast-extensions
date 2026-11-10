@@ -14,7 +14,7 @@ You can check if a user has access to the API using [`environment.canAccess(AI)`
 
 ### AI.ask
 
-Ask AI anything you want. Use this in “no-view” Commands, effects, or callbacks. In a React component, you might want to use the [`useAI` util hook](../utils-reference/react-hooks/useAI.md) instead.
+Ask AI anything you want. Use this in “no-view” Commands, effects, or callbacks. In a React component, you might want to use the [useAI util hook](../utils-reference/react-hooks/useAI.md) instead.
 
 #### Signature
 
@@ -24,8 +24,7 @@ async function ask(prompt: string, options?: AskOptions): Promise<string> & Even
 
 #### Example
 
-{% tabs %}
-{% tab title="Basic Usage" %}
+{% tabs %} {% tab title="Basic Usage" %}
 
 ```typescript
 import { AI, Clipboard } from "@raycast/api";
@@ -37,8 +36,7 @@ export default async function command() {
 }
 ```
 
-{% endtab %}
-{% tab title="Error handling" %}
+{% endtab %} {% tab title="Error handling" %}
 
 ```typescript
 import { AI, showToast, Toast } from "@raycast/api";
@@ -56,8 +54,7 @@ export default async function command() {
 }
 ```
 
-{% endtab %}
-{% tab title="Stream answer" %}
+{% endtab %} {% tab title="Stream answer" %}
 
 ```typescript
 import { AI, getSelectedFinderItems, showHUD } from "@raycast/api";
@@ -81,8 +78,7 @@ export default async function main() {
 }
 ```
 
-{% endtab %}
-{% tab title="User Feedback" %}
+{% endtab %} {% tab title="User Feedback" %}
 
 ```typescript
 import { AI, getSelectedFinderItems, showHUD } from "@raycast/api";
@@ -106,8 +102,7 @@ export default async function main() {
 }
 ```
 
-{% endtab %}
-{% tab title="Check for access" %}
+{% endtab %} {% tab title="Check for access" %}
 
 ```typescript
 import { AI, getSelectedFinderItems, showHUD, environment } from "@raycast/api";
@@ -123,8 +118,7 @@ export default async function main() {
 }
 ```
 
-{% endtab %}
-{% endtabs %}
+{% endtab %} {% endtabs %}
 
 #### Parameters
 
@@ -133,6 +127,91 @@ export default async function main() {
 #### Return
 
 A Promise that resolves with a prompt completion.
+
+### AI.refreshModels
+
+Refreshes the models provided by this extension. Only relevant for extensions that [provide AI models](../ai/provide-ai-models.md): call it after changing locally available models, for example from a Manage Models command.
+
+#### Signature
+
+```typescript
+async function refreshModels(): Promise<void>;
+```
+
+#### Example
+
+```typescript
+import { AI, showHUD } from "@raycast/api";
+
+export default async function command() {
+  await downloadModel("llama-3.3-70b");
+  await AI.refreshModels();
+  await showHUD("Model installed");
+}
+```
+
+#### Return
+
+A Promise that resolves when Raycast has re-run your extension's `getModels` export.
+
+### AI.experimental_decide
+
+Answer typed questions about a shared state in one request. Use a `noul` question for a yes/no probability, a `choice` question to select from named options, or a `score` question to rate against ordered levels.
+
+{% hint style="warning" %}
+
+This API is experimental. Its signature, question types, and response format may change in future releases.
+
+{% endhint %}
+
+Pass `{ state, questions }` as the first argument and an optional `{ signal }` as the second. Answer types are inferred from the questions you pass.
+
+#### Example
+
+```typescript
+import { AI, showHUD } from "@raycast/api";
+
+export default async function command() {
+  const answers = await AI.experimental_decide({
+    state: {
+      message: "The app crashes whenever I open the billing page. Please fix it today!",
+      page: "billing",
+    },
+    questions: {
+      urgent: { type: "noul", instructions: "Does this need urgent attention?" },
+      severity: {
+        type: "score",
+        instructions: "How severe is the issue?",
+        criteria: ["Cosmetic", "Workaround available", "Blocking"],
+      },
+      category: {
+        type: "choice",
+        instructions: "Classify the request.",
+        criteria: {
+          bug: "A defect or crash in the product",
+          billing: "A question about charges or subscriptions",
+          other: null,
+        },
+      },
+    },
+  });
+
+  // Typed as "bug" | "billing" | "other" when questions are passed as a literal.
+  await showHUD(`${answers.category.choice}: severity ${answers.severity.score}`);
+}
+```
+
+`input.state` is the JSON-serializable value all questions are evaluated against. Strings are passed as is; other values are serialized with `JSON.stringify`. Values that cannot be serialized, such as circular objects, BigInts, or top-level `undefined`, reject the promise.
+
+`input.questions` maps your question names to one of these shapes:
+
+- `{ type: "noul", instructions: string }`: returns `{ type: "noul", noul: number }`, where `noul` is a probability between 0 and 1.
+- `{ type: "choice", instructions: string, criteria: Record<string, string | null> }`: returns `{ type: "choice", choice, confidence: number, probabilities }`. Each criteria key is an allowed choice; its value describes that choice, or is `null` when the name is sufficient. `probabilities` contains a probability between 0 and 1 for each offered choice.
+- `{ type: "score", instructions: string, criteria: readonly string[] }`: `criteria` contains 2–10 non-empty descriptions in order from low to high. Returns `{ type: "score", score: number, confidence: number, legend, probabilities }`. The score ranges from `0` to `criteria.length - 1` and can be fractional. `legend` maps level indices (string keys such as `"0"`) to descriptions; `probabilities` maps those indices to probabilities between 0 and 1.
+
+The result is the answers object, keyed directly by your question names. Unlike `AI.ask`, this method returns a single result and does not stream text.
+
+Pass `options.signal` to stop waiting for a result, for example `{ signal: AbortSignal.timeout(10_000) }`. The backend may finish a request that has already been submitted.
 
 ## Types
 
@@ -148,32 +227,80 @@ If a number is passed, it needs to be in the range 0-2. For larger values, 2 wil
 
 ### AI.Model
 
-The AI model to use to answer to the prompt. Defaults to `AI.Model["OpenAI_GPT3.5-turbo"]`.
+The AI model to use to answer to the prompt. Defaults to `AI.Model["OpenAI_GPT-6_Luna"]`.
 
-#### Enumeration members
+| Model | Description |
+| --- | --- |
+| OpenAI_GPT-5.4 | OpenAI's high-performance GPT-5.4-class model for professional work and long-running agents with state-of-the-art tool-calling. |
+| OpenAI_GPT-5.4_mini | OpenAI's strongest mini model yet for coding and agentic workflows. |
+| OpenAI_GPT-5.5 | OpenAI's high-performance GPT-5.5-class model for complex reasoning and long-running agentic work. |
+| OpenAI_GPT-5.5_Instant | OpenAI's fast, capable model for everyday work with improved info-seeking, how-tos, and technical writing. |
+| OpenAI_GPT-5.6_Terra | OpenAI's balanced GPT-5.6 model for everyday work across writing, analysis, and coding. |
+| OpenAI_GPT-5.6_Luna | OpenAI's fastest GPT-5.6 model for responsive everyday tasks. |
+| OpenAI_GPT-6_Astra | OpenAI's frontier GPT-6 model for the hardest end-to-end reasoning, coding, and agentic work. |
+| OpenAI_GPT-6_Sol | OpenAI's GPT-6 model for complex coding and agentic workflows. |
+| OpenAI_GPT-6.1_Sol | OpenAI's GPT-6.1 model for complex coding and agentic workflows. |
+| OpenAI_GPT-6.1_Terra | OpenAI's balanced GPT-6.1 model for everyday work across writing, analysis, and coding. |
+| OpenAI_GPT-6_Luna | OpenAI's efficient GPT-6 model for focused, high-volume tasks. |
+| Groq_GPT-OSS_20b | OpenAI's first open-source model, 20b variant. |
+| Groq_GPT-OSS_120b | OpenAI's first open-source model, 120b variant. |
+| Anthropic_Claude_Haiku_5.5 | Anthropic's fastest model for high-volume and latency-sensitive tasks, with combined reasoning and non-reasoning capabilities. |
+| Anthropic_Claude_Sonnet_4.6 | Anthropic's previous generation Sonnet model with high intelligence across most tasks. |
+| Anthropic_Claude_Sonnet_5 | Anthropic's best combination of speed and intelligence, with combined reasoning and non-reasoning capabilities. |
+| Anthropic_Claude_Sonnet_5.5 | Anthropic's best combination of speed and intelligence, with combined reasoning and non-reasoning capabilities. |
+| Anthropic_Claude_Opus_5 | Anthropic's previous flagship Opus model with combined reasoning and non-reasoning capabilities. |
+| Anthropic_Claude_Opus_5.5 | Anthropic's most powerful model with combined reasoning and non-reasoning capabilities. |
+| Anthropic_Claude_Fable_5.1 | Anthropic's Mythos-class model for complex tasks, with safeguards for general use. |
+| Perplexity_Sonar | Fast Perplexity model with integrated search capabilities. |
+| Perplexity_Sonar_Pro | Advanced Perplexity model for complex queries with search integration. |
+| Vercel_Muse_Spark_1.3 | Meta's flagship agentic reasoning model with multimodal understanding and zero-shot tool/MCP use. |
+| Vercel_Muse_Wonder_1.0 | Meta's frontier model for complex coding and long-running agentic work, with multimodal understanding and reliable tool use. |
+| Mistral_Large | Top-tier reasoning model with strong multilingual support. |
+| Mistral_Medium | A powerful, cost-effective, frontier-class multimodal model. |
+| Mistral_Small | Latest enterprise-grade small model with improved reasoning. |
+| Mistral_Codestral | Specialized model for code-related tasks and testing. |
+| Google_Gemini_4_Argon | Google's flagship reasoning model for complex software engineering, math and science, and long-running agentic work. |
+| Google_Gemini_3.8_Flash | Balances speed with intelligence for agentic and multimodal tasks. |
+| Google_Gemini_3.5_Flash_Lite | Fast, cost-effective model for high-throughput agentic workflows and data processing. |
+| Google_Gemini_3.1_Pro | Next generation thinking model for complex problem solving. |
+| xAI_Grok-4.7 | xAI's latest flagship Grok model, delivering frontier reasoning, stronger coding, and multimodal understanding. |
+| xAI_Grok-4.6 | xAI's previous flagship Grok model with frontier reasoning, strong coding, and multimodal understanding. |
+| Vercel_GLM-5.2 | Z.AI's previous flagship model with MoE + DSA architecture for efficient long-context coding, agentic, and reasoning tasks. |
+| Vercel_GLM-5.3 | Z.AI's flagship model with stronger coding and agent capabilities than GLM-5.2, driven by post-training on the same base. |
+| Vercel_GLM-5.3_Flash | Z.AI's native multimodal coding model with hybrid attention, visual coding, and agentic tool use. |
+| Vercel_Kimi_K2.7_Code | Moonshot AI's code-optimized trillion-parameter multimodal model with enhanced coding capabilities and agentic tool-calling. |
+| Vercel_Kimi_K3 | Moonshot AI's trillion-parameter multimodal model with strong reasoning and agentic tool-calling. |
+| Vercel_Kimi_K3.1_Pro | Moonshot AI's frontier multimodal model for complex reasoning, coding, and long-horizon agentic work. |
+| Vercel_Gemma_4_31B | Google's open-weight dense model with vision and 140+ language support, tuned for output quality over throughput. |
+| Vercel_Inkling | Thinking Machines' open-weights multimodal MoE model with controllable thinking effort for reasoning, coding, and tool use. |
+| Vercel_Inkling_Small | Thinking Machines' smaller, faster open-weights multimodal MoE model with controllable thinking effort for reasoning, coding, and tool use. |
+| Vercel_DeepSeek_V4_Flash | DeepSeek's lightweight V4 MoE model tuned for fast, low-cost coding, reasoning, and agentic tasks. |
+| Vercel_DeepSeek_V4.1_Flash | DeepSeek's lightweight V4.1 MoE model tuned for fast, low-cost coding, reasoning, and agentic tasks. |
+| Vercel_DeepSeek_V4_Pro | DeepSeek's 1.6T parameter MoE model optimized for coding, reasoning, and agentic tasks with a 1M token context window. |
+| Vercel_Qwen3.8_Max | Alibaba's 2.4-trillion-parameter MoE flagship with native visual understanding for long-horizon coding and professional work. |
 
-| Name                          | Description                                                                                                                                                         |
-| :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| OpenAI_GPT3.5-turbo           | GPT-3.5 Turbo is OpenAI’s fastest model, making it ideal for tasks that require quick response times with basic language processing capabilities.                   |
-| OpenAI_GPT4                   | GPT-4 is OpenAI’s most capable model with broad general knowledge, allowing it to follow complex instructions and solve difficult problems.                         |
-| OpenAI_GPT4-turbo             | GPT-4 Turbo from OpenAI has a big context window that fits hundreds of pages of text, making it a great choice for workloads that involve longer prompts.           |
-| OpenAI_GPT4o                  | GPT-4o is the most advanced and fastest model from OpenAI, making it a great choice for complex everyday problems and deeper conversations.                         |
-| Anthropic_Claude_Haiku        | Claude 3 Haiku is Anthropic's fastest model, with a large context window that makes it ideal for analyzing code, documents, or large amounts of text.               |
-| Anthropic_Claude_Sonnet       | Claude 3.5 Sonnet from Anthropic has enhanced intelligence with increased speed. It excels at complex tasks like visual reasoning or workflow orchestrations.       |
-| Anthropic_Claude_Opus         | Claude 3 Opus is Anthropic's most intelligent model, with best-in-market performance on highly complex tasks. It stands out for remarkable fluency.                 |
-| Perplexity_Llama3_Sonar_Small | Perplexity's Llama 3 Sonar Small is built for speed. It quickly gives you helpful answers using the latest internet knowledge while minimizing hallucinations.      |
-| Perplexity_Llama3_Sonar_Large | Perplexity's most advanced model, Llama 3 Sonar Large, can handle complex questions. It considers current web knowledge to provide well-reasoned, in-depth answers. |
-| Llama3_70B                    | Llama 3 70B from Meta is the most capable openly available LLM which can serve as a tool for various text-related tasks. Powered by Groq.                           |
-| MixtraL_8x7B                  | Mixtral 8x7B from Mistral is an open-source model that demonstrates high performance in generating code and text at an impressive speed. Powered by Groq.           |
+If a model isn't available to the user (or has been disabled by the user), Raycast will fallback to a similar one.
 
-If a model isn't available to the user, Raycast will fallback to a similar one:
+### AI.ModelSelector
 
-- `AI.Model.Anthropic_Claude_Opus` and `AI.Model.Anthropic_Claude_Sonnet` -> `AI.Model.Anthropic_Claude_Haiku`
-- `AI.Model.OpenAI_GPT4` and `AI.Model["OpenAI_GPT4-turbo"]` -> `AI.Model["OpenAI_GPT3.5-turbo"]`
-- `AI.Model.Perplexity_Llama3_Sonar_Large` -> `AI.Model.Perplexity_Llama3_Sonar_Small`
+The AI model to use to answer the prompt.
+
+```typescript
+type ModelSelector = AI.Model | { id: string };
+```
+
+Pass an [`AI.Model`](#ai.model) value to use a Raycast-hosted model, or `{ id: "..." }` to use a model [provided by this extension](../ai/provide-ai-models.md) through `ai.modelProvider`. The ID is the local model `id` returned by `getModels()`.
 
 ### AI.AskOptions
 
 #### Properties
 
 <InterfaceTableFromJSDoc name="AI.AskOptions" />
+
+## Rate Limit
+
+To prevent accidental programmatic over-usage of AI quota, Raycast enforces rate limits on AI requests made from extensions.
+
+| Limit per minute | Limit per hour |
+| ---------------- | -------------- |
+| 10/minute        | 100/hour       |

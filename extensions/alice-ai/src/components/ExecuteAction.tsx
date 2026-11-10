@@ -1,9 +1,8 @@
 import { Action, ActionPanel, Color, Detail, Icon, Keyboard } from "@raycast/api";
-import { ChatCompletionChunk, ChatCompletionMessageParam } from "openai/resources";
-import { Stream } from "openai/streaming";
-import { useEffect, useState } from "react";
-import { useMetadata } from "../hooks";
-import openai, { getModelName } from "../lib/OpenAI";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useCost } from "../hooks";
+import { ReasoningLevels, getModelName, getReasoningLevel, isReasoningModel } from "../lib/OpenAI";
+import { generateActionResponse } from "../lib/generateActionResponse";
 import { useHistoryState } from "../store/history";
 import { Action as StoreAction } from "../types";
 
@@ -14,77 +13,71 @@ interface Props {
 
 export default function ExecuteAction({ action, prompt }: Props) {
   const addHistoryItem = useHistoryState((state) => state.addItem);
+  const generateLock = useRef<boolean>(false);
+  const hasStartedRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [error, setError] = useState<string>("");
-  const [stream, setStream] = useState<Stream<ChatCompletionChunk>>();
-  const [chat, setChat] = useState<ChatCompletionMessageParam[]>([]);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [result, setResult] = useState<string>("");
 
-  const metadata = useMetadata(chat, action.model);
+  const [inputTokens, setInputTokens] = useState<number>(0);
+  const [outputTokens, setOutputTokens] = useState<number>(0);
+  const [totalTokens, setTotalTokens] = useState<number>(0);
+  const cost = useCost(action.model, inputTokens, outputTokens);
 
-  const generateResponse = async () => {
+  const generateResponse = useCallback(async () => {
+    if (generateLock.current) {
+      return;
+    }
+
+    generateLock.current = true;
+
     setError("");
     setResult("");
+    setInputTokens(0);
+    setOutputTokens(0);
+    setTotalTokens(0);
 
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: action.systemPrompt,
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ];
-
-    setChat(messages);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
-      const stream = await openai.chat.completions.create({
-        model: action.model,
-        messages: messages,
-        temperature: parseFloat(action.temperature),
-        max_tokens: +action.maxTokens === -1 ? undefined : +action.maxTokens,
-        stream: true,
-      });
+      setIsStreaming(true);
+      const response = await generateActionResponse(action, prompt, controller.signal, setResult);
+      setInputTokens(response.tokens.input);
+      setOutputTokens(response.tokens.output);
+      setTotalTokens(response.tokens.total);
 
-      setStream(stream);
-
-      for await (const message of stream) {
-        const content = message.choices[0].delta.content || "";
-
-        setResult((prev) => prev + content);
+      if (response.text.length > 0) {
+        addHistoryItem({
+          action,
+          timestamp: Date.now(),
+          prompt,
+          result: response.text,
+          tokens: response.tokens,
+        });
       }
     } catch (e) {
-      const error = e as Error;
-      setError(`## ⚠️ Error Encountered\n### ${error.message}`);
+      if (!controller.signal.aborted) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(`## ⚠️ Error Encountered\n### ${message}`);
+      }
     } finally {
-      setStream(undefined);
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+      generateLock.current = false;
     }
-  };
+  }, [action, prompt, addHistoryItem]);
 
   useEffect(() => {
+    if (hasStartedRef.current) {
+      return;
+    }
+
+    hasStartedRef.current = true;
     generateResponse();
-  }, []);
-
-  useEffect(() => {
-    if (!stream && error.length === 0 && result.length > 0) {
-      setChat((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: result,
-        },
-      ]);
-
-      addHistoryItem({
-        action: action!,
-        timestamp: Date.now(),
-        prompt,
-        result,
-      });
-    }
-  }, [result, stream]);
+  }, [generateResponse]);
 
   let markdown = result;
   if (error.length > 0) {
@@ -97,7 +90,7 @@ export default function ExecuteAction({ action, prompt }: Props) {
 
   return (
     <Detail
-      isLoading={stream !== undefined}
+      isLoading={isStreaming}
       markdown={markdown}
       navigationTitle={action.name}
       metadata={
@@ -105,18 +98,21 @@ export default function ExecuteAction({ action, prompt }: Props) {
           <Detail.Metadata.TagList title="Model">
             <Detail.Metadata.TagList.Item text={getModelName(action.model)} color={Color.SecondaryText} />
           </Detail.Metadata.TagList>
-          <Detail.Metadata.Label title="Prompt Tokens" text={metadata.promptTokens.toString()} />
-          <Detail.Metadata.Label title="Result Tokens" text={metadata.resultTokens.toString()} />
-          <Detail.Metadata.Label title="Total Tokens" text={metadata.totalTokens.toString()} />
-          <Detail.Metadata.Label title="Cost" text={`$${metadata.cost.toFixed(6)}`} />
+          {isReasoningModel(action.model) && (
+            <Detail.Metadata.Label title="Reasoning Level" text={ReasoningLevels[getReasoningLevel(action.model, action.reasoningLevel)]} />
+          )}
+          <Detail.Metadata.Label title="Input Tokens" text={inputTokens.toString()} />
+          <Detail.Metadata.Label title="Output Tokens" text={outputTokens.toString()} />
+          <Detail.Metadata.Label title="Total Tokens" text={totalTokens.toString()} />
+          <Detail.Metadata.Label title="Cost" text={`$${cost.toFixed(6)}`} />
         </Detail.Metadata>
       }
       actions={
         <ActionPanel>
-          {stream && <Action title="Stop generating..." icon={Icon.Stop} onAction={() => stream.controller.abort()} />}
+          {isStreaming && <Action title="Stop Generating…" icon={Icon.Stop} onAction={() => abortControllerRef.current?.abort()} />}
           <Action.CopyToClipboard title="Copy Result" content={result} />
           <Action.Paste title="Paste Result" content={result} />
-          {!stream && (
+          {!isStreaming && (
             <Action title="Regenerate" onAction={() => generateResponse()} icon={Icon.Redo} shortcut={Keyboard.Shortcut.Common.Refresh} />
           )}
         </ActionPanel>

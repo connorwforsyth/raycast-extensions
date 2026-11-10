@@ -1,5 +1,34 @@
 # Prompt Explorer Extension Changelog
 
+## [Cross-Platform Shortcuts and AI Search] - 2026-08-19
+
+- Add Windows keyboard shortcuts across all Explorer commands
+- Add an AI tool for searching public Raycast Explorer catalog items
+
+## [Windows support] - 2026-04-22
+
+- Add Windows support for the extension
+
+## [AI Extensions updates] - 2025-03-04
+
+- Add AI Extensions to presets
+- Render inline AI Extensions in prompts
+
+## [Update] - 2025-02-27
+
+- Updated dependencies
+- Fixed linting issues
+
+## [Fixes] - 2025-02-26
+
+- Use composite keys like (`author_${username}_${name}`) to handle authors with same username but different display names
+- Added proper handling for undefined creativity values in presets and prompts components
+- Implemented fallback values (`preset.creativity || "unspecified"`) and null checks for creativity properties
+
+## [Add Explore Quicklinks] - 2024-09-20
+
+- Add command for exploring Quicklinks
+
 ## [Update endpoints] - 2024-05-06
 
 - Update endpoints for fetching data.

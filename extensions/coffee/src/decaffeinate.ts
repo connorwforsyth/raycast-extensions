@@ -1,5 +1,9 @@
-import { stopCaffeinate } from "./utils";
+import { stopCaffeinate, prepareUserStop } from "./utils";
 
 export default async () => {
-  await stopCaffeinate({ menubar: true, status: true }, "Your Mac is now decaffeinated");
+  const decision = await prepareUserStop();
+  if (!decision.allowed) return;
+  await stopCaffeinate({ menubar: true, status: true }, true, {
+    pauseRunningSchedule: decision.pauseRunningSchedule,
+  });
 };

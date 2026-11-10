@@ -1,46 +1,39 @@
-import { showToast, Toast, LocalStorage } from "@raycast/api";
+import { LocalStorage } from "@raycast/api";
 import { apiRequest } from "@/functions/apiRequest";
-import { useState } from "react";
-import useSWR from "swr";
+import { useCachedPromise } from "@raycast/utils";
+import { SearchResult, User } from "@/types";
 
-export const useLikes = () => {
-  const [loading, setLoading] = useState(true);
-  const [likes, setLikes] = useState<LikesResult[]>([]);
-
-  useSWR<LikesResult[]>(`get-user-likes`, getUserLikes, {
-    onSuccess: (data) => {
-      if ((data as Errors).errors) {
-        setLoading(false);
-        showToast(Toast.Style.Failure, "Failed to fetch likes.", (data as Errors).errors?.join("\n"));
-      } else {
-        setLikes(data);
+export function useLikes() {
+  const {
+    isLoading: loading,
+    data: likes,
+    pagination,
+    error,
+  } = useCachedPromise(
+    () => async (options: { page: number }) => {
+      let username = await LocalStorage.getItem<string>("username");
+      if (!username) {
+        const user = await apiRequest<User>("/me", { requireUserAuth: true });
+        await LocalStorage.setItem("username", user.username);
+        username = user.username;
       }
-
-      setLoading(false);
+      // /users/:username/likes is paginated (max 30 per page). Page lazily:
+      // only the pages the user scrolls to get requested, so a large likes
+      // library doesn't burn through the demo app's hourly rate limit on open.
+      const page = options.page + 1;
+      const perPage = 30;
+      const pageLikes = await apiRequest<SearchResult[]>(`/users/${username}/likes?per_page=${perPage}&page=${page}`, {
+        requireUserAuth: true,
+      });
+      return { data: pageLikes, hasMore: pageLikes.length === perPage };
     },
-    onError: (error) => {
-      showToast(Toast.Style.Failure, "Something went wrong.", String(error));
-      setLoading(false);
+    [],
+    {
+      initialData: [] as SearchResult[],
+      failureToastOptions: { title: "Failed to fetch likes." },
     },
-  });
-
-  return {
-    loading,
-    likes,
-  };
-};
-
-export const getUserLikes = async () => {
-  let username = await LocalStorage.getItem("username");
-
-  if (!username) {
-    const user = await apiRequest<User>("/me");
-    LocalStorage.setItem("username", user.username);
-    username = user.username;
-  }
-
-  const likes = await apiRequest<LikesResult[]>(`/users/${username}/likes`);
-  return likes;
-};
+  );
+  return { loading, likes, pagination, error };
+}
 
 export default useLikes;

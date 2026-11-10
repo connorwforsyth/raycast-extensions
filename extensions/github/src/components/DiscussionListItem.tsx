@@ -1,8 +1,12 @@
 import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
 import { format } from "date-fns";
+import type { JSX } from "react";
 
 import { DiscussionFieldsFragment } from "../generated/graphql";
+import { DISCUSSION_SORT_TYPES_TO_QUERIES } from "../helpers/discussion";
 import { getGitHubUser } from "../helpers/users";
+
+import { SortAction, SortActionProps } from "./SortAction";
 
 function getDiscussionIcon(discussion: DiscussionFieldsFragment): List.Item.Props["icon"] {
   const categoryText = discussion.category?.name ? `Category: ${discussion.category?.name}` : "Unknown";
@@ -29,7 +33,7 @@ function getDiscussionIcon(discussion: DiscussionFieldsFragment): List.Item.Prop
   return fb;
 }
 
-export function DiscussionListItem(props: { discussion: DiscussionFieldsFragment }): JSX.Element {
+export function DiscussionListItem(props: { discussion: DiscussionFieldsFragment } & SortActionProps): JSX.Element {
   const d = props.discussion;
   const user = getGitHubUser(d.author);
   return (
@@ -52,15 +56,22 @@ export function DiscussionListItem(props: { discussion: DiscussionFieldsFragment
           icon: d.comments ? Icon.SpeechBubble : undefined,
           tooltip: d.comments ? `Comments: ${d.comments.totalCount}` : undefined,
         },
-        {
-          date: new Date(d.publishedAt),
-          tooltip: d.publishedAt ? format(new Date(d.publishedAt), "EEEE d MMMM yyyy 'at' HH:mm") : undefined,
-        },
+        ...(d.publishedAt
+          ? [
+              {
+                date: new Date(d.publishedAt),
+                tooltip: format(new Date(d.publishedAt), "EEEE d MMMM yyyy 'at' HH:mm"),
+              },
+            ]
+          : []),
         { icon: user.icon, tooltip: user.text },
       ]}
       actions={
         <ActionPanel>
           <Action.OpenInBrowser url={d.url} />
+          <ActionPanel.Section>
+            <SortAction data={DISCUSSION_SORT_TYPES_TO_QUERIES} {...props} />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     />

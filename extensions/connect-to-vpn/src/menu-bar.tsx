@@ -1,23 +1,83 @@
-import { MenuBarExtra, Icon, showToast, Toast } from "@raycast/api";
-import { NetworkService, normalizeHardwarePort, openNetworkSettings, useNetworkServices } from "./network-services";
+import { MenuBarExtra, Color } from "@raycast/api";
+import {
+  NetworkService,
+  normalizeHardwarePort,
+  openNetworkSettings,
+  transitionLabel,
+  useNetworkServices,
+} from "./network-services";
+import { useEffect } from "react";
+import { getMenuBarRefreshTimestamp } from "./store";
 
 export default function Command() {
   const {
     isLoading,
-    error,
     favoriteServices,
     invalidServices,
     otherServices,
     getActionForService,
     hideInvalidDevices,
+    refreshServices,
+    refreshServicesFromAction,
+    error,
   } = useNetworkServices();
 
-  if (error) {
-    showToast(Toast.Style.Failure, "Something went wrong", error.message);
-  }
+  const connectedServices = [...favoriteServices, ...otherServices].filter((service) => service.status === "connected");
+  const isConnected = connectedServices.length > 0;
+  const tooltip = isLoading
+    ? "Checking VPN status…"
+    : error
+      ? "Unable to refresh VPN status"
+      : isConnected
+        ? `Connected to ${connectedServices.map((service) => service.name).join(", ")}`
+        : "No VPN connected";
+
+  useEffect(() => {
+    let cancelled = false;
+    let checking = false;
+    let lastTimestamp: number | undefined;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const timestamp = await getMenuBarRefreshTimestamp();
+        if (cancelled) return;
+        if (lastTimestamp === undefined) {
+          lastTimestamp = timestamp;
+        } else if (timestamp > lastTimestamp) {
+          const result = await refreshServices();
+          // Persistent failures wait for the scheduled refresh instead of spawning processes twice a second.
+          if (result === "refreshed" || result === "failed") lastTimestamp = timestamp;
+        }
+      } catch (err) {
+        console.error("Unable to check for VPN updates:", err);
+      } finally {
+        checking = false;
+      }
+    };
+    void check();
+    const timer = setInterval(check, 500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [refreshServices]);
 
   return (
-    <MenuBarExtra icon={Icon.Network} tooltip="Network Services" isLoading={isLoading}>
+    <MenuBarExtra
+      icon={{
+        source: isConnected ? "network-connected.png" : "network-disconnected.png",
+        tintColor: Color.PrimaryText,
+      }}
+      tooltip={tooltip}
+      isLoading={isLoading}
+    >
+      {error && <MenuBarExtra.Item title="Network Service Error" subtitle={error.message} />}
+      {!isLoading &&
+        !error &&
+        favoriteServices.length === 0 &&
+        otherServices.length === 0 &&
+        (hideInvalidDevices || invalidServices.length === 0) && <MenuBarExtra.Item title="No VPN Services Found" />}
       {favoriteServices.length > 0 && (
         <MenuBarExtra.Section title="Favorites">
           {favoriteServices.map((service) => (
@@ -40,6 +100,7 @@ export default function Command() {
         </MenuBarExtra.Section>
       )}
       <MenuBarExtra.Section>
+        <MenuBarExtra.Item title="Refresh Status" onAction={refreshServicesFromAction} />
         <MenuBarExtra.Item title="Open Network Settings…" onAction={openNetworkSettings} />
       </MenuBarExtra.Section>
     </MenuBarExtra>
@@ -52,7 +113,7 @@ export default function Command() {
       <MenuBarExtra.Item
         icon={actionDetails.icon}
         title={service.name}
-        subtitle={normalizeHardwarePort(service.hardwarePort, service.name)}
+        subtitle={transitionLabel(service.status) ?? normalizeHardwarePort(service.hardwarePort, service.name)}
         onAction={actionDetails.action}
       />
     );

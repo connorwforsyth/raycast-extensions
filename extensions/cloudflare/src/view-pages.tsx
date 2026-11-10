@@ -1,51 +1,61 @@
 import { Action, ActionPanel, Detail, Icon, List } from '@raycast/api';
 import { useEffect, useState } from 'react';
 
-import Service, { Account, Deployment, Domain, Page } from './service';
+import { Deployment, Domain, Page } from './service';
 import {
   getCommitUrl,
   getDeploymentStatusIcon,
   getDeploymentUrl,
   getDomainStatusIcon,
-  getToken,
   getPageUrl,
   getRepoUrl,
   handleNetworkError,
   toUrl,
 } from './utils';
-
-const service = new Service(getToken());
+import { getCloudflareService, withCloudflareAccessToken } from './oauth';
+import { useCachedPromise } from '@raycast/utils';
 
 function Command() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [pages, setPages] = useState<Record<string, Page[]>>({});
-  const [isLoading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchPages() {
-      try {
-        const accounts = await service.listAccounts();
-        setAccounts(accounts);
-
-        const pages: Record<string, Page[]> = {};
-        for (let i = 0; i < accounts.length; i++) {
-          const account = accounts[i];
-          const accountPages = await service.listPages(account.id);
-          pages[account.id] = accountPages;
-        }
-        setPages(pages);
-        setLoading(false);
-      } catch (e) {
-        setLoading(false);
-        handleNetworkError(e);
+  const {
+    isLoading,
+    data: { accounts, pages },
+  } = useCachedPromise(
+    async () => {
+      const accounts = await getCloudflareService().listAccounts();
+      const pages: Record<string, Page[]> = {};
+      for (let i = 0; i < accounts.length; i++) {
+        const account = accounts[i];
+        const accountPages = await getCloudflareService().listPages(account.id);
+        pages[account.id] = accountPages;
       }
-    }
-
-    fetchPages();
-  }, []);
+      return {
+        accounts,
+        pages,
+      };
+    },
+    [],
+    {
+      initialData: {
+        accounts: [],
+        pages: [],
+      },
+    },
+  );
 
   return (
     <List isLoading={isLoading}>
+      {!isLoading && !Object.keys(pages).length && (
+        <List.EmptyView
+          icon="no-pages.svg"
+          title="Create by importing an existing Git repository"
+          description="or Upload your site's assets including HTML, CSS, and JS files directly from your computer."
+          actions={
+            <ActionPanel>
+              <Action.OpenInBrowser url="https://pages.cloudflare.com/" />
+            </ActionPanel>
+          }
+        />
+      )}
       {Object.entries(pages)
         .filter((entry) => entry[1].length > 0)
         .map((entry) => {
@@ -160,7 +170,7 @@ function PageView(props: PageProps) {
   useEffect(() => {
     async function fetchPages() {
       try {
-        const page = await service.getPage(accountId, name);
+        const page = await getCloudflareService().getPage(accountId, name);
         setPage(page);
         setLoading(false);
       } catch (e) {
@@ -288,7 +298,10 @@ function DeploymentListView(props: DeploymentListProps) {
   useEffect(() => {
     async function fetchDeployments() {
       try {
-        const deployments = await service.listDeployments(accountId, pageName);
+        const deployments = await getCloudflareService().listDeployments(
+          accountId,
+          pageName,
+        );
         setDeployments(deployments);
         setLoading(false);
       } catch (e) {
@@ -307,6 +320,16 @@ function DeploymentListView(props: DeploymentListProps) {
           key={deployment.id}
           icon={getDeploymentStatusIcon(deployment.status)}
           title={deployment.commit.message}
+          subtitle={deployment.trigger.branch || deployment.environment}
+          accessories={[
+            ...(deployment.environment
+              ? [{ tag: deployment.environment }]
+              : []),
+            {
+              date: new Date(deployment.createdOn),
+              tooltip: new Date(deployment.createdOn).toLocaleString(),
+            },
+          ]}
           actions={
             <ActionPanel>
               <Action.Push
@@ -320,16 +343,25 @@ function DeploymentListView(props: DeploymentListProps) {
                   />
                 }
               />
-              <Action.OpenInBrowser
-                title="Open Page"
-                url={deployment.url}
-                shortcut={{ modifiers: ['cmd'], key: 'p' }}
+              <Action.Push
+                icon={Icon.Terminal}
+                title="Show Build Logs"
+                target={
+                  <PageDeploymentLogsView
+                    accountId={accountId}
+                    pageName={pageName}
+                    deploymentId={deployment.id}
+                  />
+                }
               />
-              <Action.OpenInBrowser
-                title="Open Repo"
-                url={getCommitUrl(deployment.source, deployment.commit.hash)}
-                shortcut={{ modifiers: ['cmd'], key: 'r' }}
-              />
+              <Action.OpenInBrowser title="Open Page" url={deployment.url} />
+              {deployment.source && deployment.commit.hash && (
+                <Action.OpenInBrowser
+                  title="Open Repo"
+                  url={getCommitUrl(deployment.source, deployment.commit.hash)}
+                  shortcut={{ modifiers: ['cmd'], key: 'r' }}
+                />
+              )}
               <Action.OpenInBrowser
                 title="Open on Cloudflare"
                 url={getDeploymentUrl(accountId, pageName, deployment.id)}
@@ -358,7 +390,11 @@ function DeploymentView(props: DeploymentProps) {
   useEffect(() => {
     async function fetchDeployment() {
       try {
-        const deployment = await service.getDeployment(accountId, pageName, id);
+        const deployment = await getCloudflareService().getDeployment(
+          accountId,
+          pageName,
+          id,
+        );
         setDeployment(deployment);
         setLoading(false);
       } catch (e) {
@@ -374,17 +410,7 @@ function DeploymentView(props: DeploymentProps) {
     return <Detail isLoading={isLoading} markdown="" />;
   }
 
-  const markdown = `
-  # Deploy
-
-  ## Commit
-
-  ${deployment.commit.message}
-
-  ## Status
-
-  ${deployment.status}
-  `;
+  const markdown = formatDeploymentMarkdown(deployment);
 
   return (
     <Detail
@@ -392,16 +418,25 @@ function DeploymentView(props: DeploymentProps) {
       markdown={markdown}
       actions={
         <ActionPanel>
-          <Action.OpenInBrowser
-            title="Open Page"
-            url={deployment.url}
-            shortcut={{ modifiers: ['cmd'], key: 'p' }}
+          <Action.OpenInBrowser title="Open Page" url={deployment.url} />
+          <Action.Push
+            icon={Icon.Terminal}
+            title="Show Build Logs"
+            target={
+              <PageDeploymentLogsView
+                accountId={accountId}
+                pageName={pageName}
+                deploymentId={id}
+              />
+            }
           />
-          <Action.OpenInBrowser
-            title="Open Repo"
-            url={getCommitUrl(deployment.source, deployment.commit.hash)}
-            shortcut={{ modifiers: ['cmd'], key: 'r' }}
-          />
+          {deployment.source && deployment.commit.hash && (
+            <Action.OpenInBrowser
+              title="Open Repo"
+              url={getCommitUrl(deployment.source, deployment.commit.hash)}
+              shortcut={{ modifiers: ['cmd'], key: 'r' }}
+            />
+          )}
           <Action.OpenInBrowser
             title="Open on Cloudflare"
             url={getDeploymentUrl(accountId, pageName, id)}
@@ -410,6 +445,110 @@ function DeploymentView(props: DeploymentProps) {
         </ActionPanel>
       }
     />
+  );
+}
+
+function formatDeploymentMarkdown(deployment: Deployment): string {
+  const stages = deployment.stages.length
+    ? [
+        '| Stage | Status | Duration |',
+        '| --- | --- | --- |',
+        ...deployment.stages.map(
+          (stage) =>
+            `| ${stage.name} | ${stage.status} | ${formatStageDuration(stage.startedOn, stage.endedOn)} |`,
+        ),
+      ].join('\n')
+    : '_No stage history returned._';
+  const aliases = deployment.aliases.length
+    ? deployment.aliases.map((alias) => `- [${alias}](${alias})`).join('\n')
+    : '_No aliases._';
+
+  return `# ${deployment.commit.message}
+
+- **Status:** ${deployment.status}
+- **Environment:** ${deployment.environment || 'Unknown'}
+- **Branch:** ${deployment.trigger.branch || 'Unknown'}
+- **Trigger:** ${deployment.trigger.type || 'Unknown'}
+- **Created:** ${new Date(deployment.createdOn).toLocaleString()}
+- **Functions:** ${deployment.usesFunctions ? 'Yes' : 'No'}
+- **Skipped:** ${deployment.isSkipped ? `Yes (${deployment.skipReason || 'no reason provided'})` : 'No'}
+
+## Stages
+
+${stages}
+
+## Aliases
+
+${aliases}`;
+}
+
+function formatStageDuration(start?: string, end?: string): string {
+  if (!start) return 'Not started';
+  if (!end) return 'In progress';
+  const duration = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(duration) || duration < 0) return 'Unknown';
+  if (duration < 1000) return `${duration} ms`;
+  if (duration < 60_000) return `${Math.round(duration / 1000)} sec`;
+  return `${Math.round(duration / 60_000)} min`;
+}
+
+interface PageDeploymentLogsViewProps {
+  accountId: string;
+  pageName: string;
+  deploymentId: string;
+}
+
+export function PageDeploymentLogsView({
+  accountId,
+  pageName,
+  deploymentId,
+}: PageDeploymentLogsViewProps) {
+  const { isLoading, data: logs = [] } = useCachedPromise(
+    async () =>
+      getCloudflareService().getPageDeploymentLogs(
+        accountId,
+        pageName,
+        deploymentId,
+      ),
+    [],
+    { onError: handleNetworkError },
+  );
+
+  return (
+    <List isLoading={isLoading} searchBarPlaceholder="Search deployment logs">
+      {!isLoading && logs.length === 0 && (
+        <List.EmptyView
+          icon={Icon.Terminal}
+          title="No Build Logs"
+          description="Cloudflare did not return logs for this deployment."
+        />
+      )}
+      {logs.map((log, index) => (
+        <List.Item
+          key={`${log.timestamp}-${index}`}
+          icon={Icon.Terminal}
+          title={log.line || 'Empty log line'}
+          accessories={[
+            {
+              date: new Date(log.timestamp),
+              tooltip: new Date(log.timestamp).toLocaleString(),
+            },
+          ]}
+          actions={
+            <ActionPanel>
+              <Action.CopyToClipboard
+                title="Copy Log Line"
+                content={log.line}
+              />
+              <Action.CopyToClipboard
+                title="Copy All Logs"
+                content={logs.map((entry) => entry.line).join('\n')}
+              />
+            </ActionPanel>
+          }
+        />
+      ))}
+    </List>
   );
 }
 
@@ -427,7 +566,10 @@ function DomainListView(props: DomainListProps) {
   useEffect(() => {
     async function fetchDomains() {
       try {
-        const domains = await service.listDomains(accountId, pageName);
+        const domains = await getCloudflareService().listDomains(
+          accountId,
+          pageName,
+        );
         setDomains(domains);
         setLoading(false);
       } catch (e) {
@@ -469,4 +611,4 @@ function DomainListView(props: DomainListProps) {
   );
 }
 
-export default Command;
+export default withCloudflareAccessToken(Command);

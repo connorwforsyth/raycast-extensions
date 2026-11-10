@@ -1,35 +1,35 @@
-import { getPreferenceValues, Grid, Icon } from "@raycast/api";
+import { Color, Grid, Icon } from "@raycast/api";
 import React from "react";
 import { RaycastWallpaperWithInfo } from "../types/types";
 import { RaycastWallpaperEmptyView } from "./raycast-wallpaper-empty-view";
-import { Preferences } from "../types/preferences";
 import { ActionOnRaycastWallpaper } from "./action-on-raycast-wallpaper";
 import { getThumbnailUrl } from "../utils/common-utils";
+import { columns, layout } from "../types/preferences";
 
 export function RaycastWallpaperGrid(props: {
   raycastWallpapers: RaycastWallpaperWithInfo[];
+  isLoading: boolean;
   setRefresh: React.Dispatch<React.SetStateAction<number>>;
   selectedItem: string;
   setSelectedItem: React.Dispatch<React.SetStateAction<string>>;
 }) {
-  const preferences = getPreferenceValues<Preferences>();
-  const { raycastWallpapers, setRefresh, selectedItem, setSelectedItem } = props;
+  const { isLoading, raycastWallpapers, setRefresh, selectedItem, setSelectedItem } = props;
 
   return (
     <Grid
-      isLoading={raycastWallpapers.length === 0}
-      columns={parseInt(preferences.columns)}
+      isLoading={isLoading}
+      columns={parseInt(columns)}
       aspectRatio={"16/9"}
       fit={Grid.Fit.Fill}
       selectedItemId={selectedItem}
       onSelectionChange={(selected) => {
         if (selected) {
-          setSelectedItem(selectedItem);
+          setSelectedItem(selected);
         }
       }}
       searchBarPlaceholder={"Search wallpapers..."}
     >
-      <RaycastWallpaperEmptyView layout={preferences.layout} />
+      <RaycastWallpaperEmptyView layout={layout} />
       {raycastWallpapers.map((value, index) => {
         return (
           <Grid.Item
@@ -45,7 +45,14 @@ export function RaycastWallpaperGrid(props: {
                 setSelectedItem={setSelectedItem}
               />
             }
-            accessory={value.exclude ? { icon: Icon.XMarkTopRightSquare, tooltip: "Excluded From Auto Switch" } : {}}
+            accessory={
+              value.exclude
+                ? {
+                    icon: { source: Icon.XMarkTopRightSquare, tintColor: Color.SecondaryText },
+                    tooltip: "Excluded From Auto Switch",
+                  }
+                : undefined
+            }
           />
         );
       })}

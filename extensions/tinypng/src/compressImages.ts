@@ -1,57 +1,63 @@
-import { existsSync } from "fs";
-import { mkdirSync } from "fs";
+import { statSync, createReadStream, createWriteStream } from "node:fs";
 import { showToast, Toast, getSelectedFinderItems, getPreferenceValues, showHUD } from "@raycast/api";
-import { statSync, createReadStream, createWriteStream } from "fs";
 import fetch from "node-fetch";
-import { dirname, basename, join } from "path";
-import { compressImageResponseScheme } from "./zodSchema";
-import { Preference } from "./types";
-import { resolveOutputPath } from "./lib/utils";
+import { compressImageResponseScheme } from "./lib/zodSchema";
+import { filterSupportedImagePaths, isMacOS, resolveOutputFile } from "./lib/utils";
+import { showFailureToast } from "@raycast/utils";
 
-const preferences = getPreferenceValues<Preference>();
+const preferences = getPreferenceValues<Preferences>();
 
 export default async function main() {
   let filePaths: string[];
 
   try {
-    filePaths = (await getSelectedFinderItems()).map((f) => f.path);
-  } catch (e) {
+    filePaths = filterSupportedImagePaths((await getSelectedFinderItems()).map((f) => f.path));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showFailureToast(message, { title: `Could not get the selected ${isMacOS ? "Finder" : "File Explorer"} items` });
+    return;
+  }
+
+  if (filePaths.length === 0) {
     await showToast({
       style: Toast.Style.Failure,
-      title: "Error",
-      message: e instanceof Error ? e.message : "Could not get the selected Finder items",
+      title: "No images found",
+      message: "Selected files must be AVIF, PNG, JPEG or WebP images",
     });
     return;
   }
 
+  const isSingleFile = filePaths.length === 1;
+
   const toast = await showToast({
     style: Toast.Style.Animated,
-    title: "Compressing images...",
+    title: `Compressing ${filePaths.length} ${isSingleFile ? "image" : "images"}…`,
   });
 
   try {
-    const results = await Promise.all(filePaths.map((filePath) => _compressImage(filePath)));
+    const results = await Promise.all(filePaths.map((filePath) => _compressImage(filePath, isSingleFile)));
     const totalOriginalSize = results.reduce((acc, cur) => acc + cur[0].originalSize, 0);
     const totalCompressedSize = results.reduce((acc, cur) => acc + cur[0].compressedSize, 0);
 
     await showHUD(
-      `Compression successful 🎉  (-${(100 - (totalCompressedSize / totalOriginalSize) * 100).toFixed(1)}%)`
+      `Compression successful 🎉  (-${(100 - (totalCompressedSize / totalOriginalSize) * 100).toFixed(1)}%)`,
     );
-  } catch (e) {
+  } catch (error) {
     toast.style = Toast.Style.Failure;
     toast.title = "Error";
-    toast.message = e instanceof Error ? e.message : "failed to compress images";
+    toast.message = error instanceof Error ? error.message : "Failed to compress images";
   }
 }
 
 const _compressImage = async (
-  filePath: string
+  filePath: string,
+  isSingleFile: boolean,
 ): Promise<
   [
     {
       originalSize: number;
       compressedSize: number;
-    }
+    },
   ]
 > => {
   const { size } = statSync(filePath);
@@ -80,15 +86,13 @@ const _compressImage = async (
   const resGet = await fetch(downloadUrl);
 
   // Save compressed image
-  let outputDir = dirname(filePath);
-  if (!preferences.overwrite) {
-    outputDir = resolveOutputPath(filePath, preferences.destinationFolderPath);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir);
-    }
-  }
+  const outputPath = resolveOutputFile(filePath, {
+    destinationFolderPath: preferences.destinationFolderPath,
+    overwrite: preferences.overwrite,
+    isSingleFile: preferences.saveSingleFileNextToOriginal && isSingleFile,
+    suffix: "-compressed",
+  });
 
-  const outputPath = join(outputDir, basename(filePath));
   const outputFileStream = createWriteStream(outputPath);
 
   await new Promise((resolve, reject) => {

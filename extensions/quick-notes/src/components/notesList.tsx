@@ -1,10 +1,10 @@
-import { List } from "@raycast/api";
+import { Icon, List } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { compareDesc, format } from "date-fns";
-import { notesAtom, Note, tagsAtom, Tag, Sort } from "../services/atoms";
+import { notesAtom, Note, tagsAtom, Tag, Sort, sortOptions } from "../services/atoms";
 import Actions from "./actions";
-import { countWords, getTintColor } from "../utils/utils";
+import { countWords, getIcon, getTintColor, isMacOS } from "../utils/utils";
 import { useCachedState } from "@raycast/utils";
 import slugify from "slugify";
 import { includes, pull } from "lodash";
@@ -22,16 +22,32 @@ const ListItem = ({
   onApplyTag: (tag: string, noteBody?: string) => void;
   showMenu?: boolean;
 }) => {
+  const generateBody = (note: Note) => {
+    if (note.summary) {
+      return `
+### AI Summary
+
+${note.summary ?? "No summary available."}
+
+---
+
+${note.body}
+`;
+    } else {
+      return note.body;
+    }
+  };
+
   return (
     <List.Item
       title={note.title}
+      icon={getIcon(note.icon)}
       detail={
         <List.Item.Detail
-          markdown={note.body}
+          markdown={generateBody(note)}
           metadata={
             showMenu ? (
               <List.Item.Detail.Metadata>
-                <List.Item.Detail.Metadata.Label title={note.title} />
                 {note.tags.length > 0 && (
                   <List.Item.Detail.Metadata.TagList title="Tags">
                     {note.tags.map((tag, index) => (
@@ -62,6 +78,7 @@ const ListItem = ({
           noNotes={false}
           isDraft={note.is_draft}
           title={note.title}
+          icon={note.icon}
           note={note.body}
           tags={note.tags}
           createdAt={note.createdAt}
@@ -93,15 +110,15 @@ const sortNotes = (notes: Note[], sort: Sort) => {
   });
 };
 
-const NotesList = () => {
+export default function NotesList({ sText, sTag }: { sText?: string; sTag?: string }) {
   const [notes, setNotes] = useAtom(notesAtom);
   const [tags] = useAtom(tagsAtom);
   const [menu] = useCachedState("menu", false);
   const [sort] = useCachedState<Sort>("sort", "updated");
 
-  const [searchText, setSearchText] = useState("");
-  const [searchTag, setSearchTag] = useState("");
-  const [filteredNotes, setFilteredNotes] = useState<Note[]>(notes);
+  const [searchText, setSearchText] = useState(sText ?? "");
+  const [searchTag, setSearchTag] = useState(sTag ?? "");
+  const [filteredNotes, setFilteredNotes] = useState<Note[]>([]);
 
   // Update notes on sort
   useEffect(() => {
@@ -118,6 +135,7 @@ const NotesList = () => {
   // Sort by tag if user preference is set
   const isCategories = sort === "tags";
   const noTagNotes = published.filter((n) => n.tags.length === 0);
+  const sectionTitle = sort === "alphabetical" ? "Sorting Alphabetically" : `Sorting by ${sortOptions[sort].title}`;
 
   // Custom search
   const filterList = (searchText: string) => {
@@ -174,6 +192,7 @@ const NotesList = () => {
 
   return (
     <List
+      isLoading={filteredNotes.length === 0 && notes.length !== 0 && searchText === "" && searchTag === ""}
       searchBarPlaceholder="Search for a Note"
       filtering={false}
       isShowingDetail={notes.length > 0}
@@ -188,9 +207,14 @@ const NotesList = () => {
             placeholder="Tags"
             tooltip="Tags"
           >
-            <List.Dropdown.Item title="All Notes" value="" />
+            <List.Dropdown.Item title="All Notes" value="" icon={Icon.BulletPoints} />
             {tags.map((tag, index) => (
-              <List.Dropdown.Item key={index} title={tag.name} value={tag.name} />
+              <List.Dropdown.Item
+                key={index}
+                title={tag.name}
+                value={tag.name}
+                icon={{ source: "dot.png", tintColor: getTintColor(tag.color) }}
+              />
             ))}
           </List.Dropdown>
         ) : undefined
@@ -198,13 +222,13 @@ const NotesList = () => {
     >
       {published.length === 0 && drafts.length === 0 ? (
         <List.EmptyView
-          title="⌘ + N to create a new note."
+          title={`${isMacOS ? "⌘ + N" : "Ctrl + N"} to create a new note`}
           actions={<Actions noNotes onTagFilter={filterByTags} onApplyTag={onApplyTag} />}
         />
       ) : (
         <>
           {drafts.length > 0 && (
-            <List.Section title="Drafts">
+            <List.Section title="Drafts" subtitle={`${drafts.length} note${drafts.length === 1 ? "" : "s"}`}>
               {drafts.map((note, index) => (
                 <ListItem
                   key={index}
@@ -219,25 +243,25 @@ const NotesList = () => {
           )}
           {isCategories ? (
             <>
-              {tags.map((tag, index) => (
-                <List.Section key={index} title={tag.name}>
-                  {published.map(
-                    (note, index) =>
-                      note.tags.includes(tag.name) && (
-                        <ListItem
-                          key={index}
-                          note={note}
-                          showMenu={menu}
-                          filterByTags={filterByTags}
-                          onApplyTag={onApplyTag}
-                          tags={tags}
-                        />
-                      ),
-                  )}
-                </List.Section>
-              ))}
+              {tags.map((tag, index) => {
+                const tagNotes = published.filter((note) => note.tags.includes(tag.name));
+                return (
+                  <List.Section key={index} title={tag.name} subtitle={`${tagNotes.length}`}>
+                    {tagNotes.map((note, index) => (
+                      <ListItem
+                        key={index}
+                        note={note}
+                        showMenu={menu}
+                        filterByTags={filterByTags}
+                        onApplyTag={onApplyTag}
+                        tags={tags}
+                      />
+                    ))}
+                  </List.Section>
+                );
+              })}
               {noTagNotes.length > 0 && (
-                <List.Section title="Notes">
+                <List.Section title="No Tags" subtitle={`${noTagNotes.length}`}>
                   {noTagNotes.map((note, index) => (
                     <ListItem
                       key={index}
@@ -252,7 +276,7 @@ const NotesList = () => {
               )}
             </>
           ) : (
-            <List.Section title="Notes">
+            <List.Section title={sectionTitle} subtitle={`${published.length}`}>
               {published.map((note, index) => (
                 <ListItem
                   key={index}
@@ -269,6 +293,4 @@ const NotesList = () => {
       )}
     </List>
   );
-};
-
-export default NotesList;
+}

@@ -1,159 +1,221 @@
-import fetch from "node-fetch";
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Action, ActionPanel, Icon, List, showToast, Toast, Clipboard } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Clipboard,
+  Icon,
+  List,
+  openExtensionPreferences,
+  showToast,
+  Toast,
+  Keyboard,
+} from "@raycast/api";
 
-import type { SpotifyContent, ApiError } from "./@types/global";
-import { SpotifyContentLinkType, SpotifyMetadataType } from "./@types/global";
+import type { SearchResult } from "./@types/global";
+import { Adapter, MetadataType } from "./@types/global";
 
-import { SITE_URL, API_URL, SPOTIFY_LINK_REGEX } from "./constants";
+import { getSiteUrl } from "./constants";
 
 import { cacheLastSearch, getLastSearch } from "./utils/cache";
 import { playAudio, stopAudio } from "./utils/audio";
+import { apiCall, isAbortError, isLinkValid } from "./shared/searchToClipboard";
 
-const spotifyContentLinksTitles = {
-  [SpotifyContentLinkType.YouTube]: "YouTube",
-  [SpotifyContentLinkType.Deezer]: "Deezer",
-  [SpotifyContentLinkType.AppleMusic]: "Apple Music",
-  [SpotifyContentLinkType.Tidal]: "Tidal",
-  [SpotifyContentLinkType.SoundCloud]: "SoundCloud",
+const searchResultLinksTitles: Record<string, string> = {
+  [Adapter.YouTube]: "YouTube",
+  [Adapter.Deezer]: "Deezer",
+  [Adapter.AppleMusic]: "Apple Music",
+  [Adapter.Tidal]: "Tidal",
+  [Adapter.SoundCloud]: "SoundCloud",
+  [Adapter.Spotify]: "Spotify",
+  [Adapter.Qobuz]: "Qobuz",
+  [Adapter.Bandcamp]: "Bandcamp",
+  [Adapter.Pandora]: "Pandora",
 };
 
-const spotifyContentTypesTitles = {
-  [SpotifyMetadataType.Song]: "Song",
-  [SpotifyMetadataType.Album]: "Album",
-  [SpotifyMetadataType.Playlist]: "Playlist",
-  [SpotifyMetadataType.Artist]: "Artist",
-  [SpotifyMetadataType.Podcast]: "Podcast",
-  [SpotifyMetadataType.Show]: "Show",
+const searchResultTypesTitles: Record<MetadataType, string> = {
+  [MetadataType.Song]: "Song",
+  [MetadataType.Album]: "Album",
+  [MetadataType.Playlist]: "Playlist",
+  [MetadataType.Artist]: "Artist",
+  [MetadataType.Podcast]: "Podcast",
+  [MetadataType.Show]: "Show",
 };
 
 export default function Command() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchText, setSearchText] = useState("");
-  const [spotifyContent, setSpotifyContent] = useState<SpotifyContent>();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [state, setState] = useState<{ searchText: string; searchResult: SearchResult | null }>({
+    searchText: "",
+    searchResult: null,
+  });
 
-  const fetchSpotifyContent = useCallback(
-    async (spotifyLink: string) => {
-      setSearchText(spotifyLink);
-      setSpotifyContent(undefined);
+  const searchLinks = useCallback(async (link: string) => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-      if (!SPOTIFY_LINK_REGEX.test(spotifyLink)) {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await apiCall(link, undefined, controller.signal);
+      setState((prev) => ({ ...prev, searchResult: response }));
+      cacheLastSearch(link, response);
+    } catch (error) {
+      if (isAbortError(error) || controller.signal.aborted) {
         return;
       }
 
-      setIsLoading(true);
-
-      try {
-        const request = await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            spotifyLink,
-          }),
-        });
-
-        const spotifyContent = (await request.json()) as SpotifyContent & ApiError;
-
-        if (request.status !== 200) {
-          throw new Error(spotifyContent.message);
-        }
-
-        setSpotifyContent(spotifyContent);
-        cacheLastSearch(spotifyLink, spotifyContent);
-      } catch (error) {
-        console.error(error);
-        setSpotifyContent(undefined);
-        showToast(Toast.Style.Failure, "Error", (error as Error).message);
+      console.error(error);
+      const message = (error as Error).message;
+      setState((prev) => ({ ...prev, searchResult: null }));
+      setErrorMessage(message);
+      showToast(Toast.Style.Failure, "Error", message);
+    } finally {
+      if (abortControllerRef.current === controller) {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
-    },
-    [setSearchText, setIsLoading, setSpotifyContent]
-  );
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
       const clipboardText = await Clipboard.readText();
       const lastSearch = getLastSearch();
 
-      if (
-        clipboardText &&
-        SPOTIFY_LINK_REGEX.test(clipboardText) &&
-        !(lastSearch && lastSearch.spotifyLink === clipboardText)
-      ) {
-        return await fetchSpotifyContent(clipboardText);
+      if (lastSearch && clipboardText === lastSearch.link) {
+        setState({ searchText: lastSearch.link, searchResult: lastSearch.searchResult });
+        return;
       }
 
-      if (lastSearch) {
-        setSpotifyContent(lastSearch.spotifyContent);
-        setSearchText(lastSearch.spotifyLink);
+      if (clipboardText && isLinkValid(clipboardText)) {
+        setState((prev) => ({ ...prev, searchText: clipboardText }));
+        showToast(Toast.Style.Success, "Link captured from clipboard!");
+        await searchLinks(clipboardText);
+        return;
       }
-
-      setIsLoading(false);
     })();
-  }, [fetchSpotifyContent, setIsLoading, setSearchText, setSpotifyContent]);
+
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, [searchLinks]);
+
+  const showErrorView = Boolean(errorMessage) && !state.searchResult && !isLoading;
+  const showEmptyPrompt = state.searchText === "" && !state.searchResult && !errorMessage;
 
   return (
     <List
       isLoading={isLoading}
-      searchText={searchText}
-      onSearchTextChange={(spotifyLink) => fetchSpotifyContent(spotifyLink)}
+      searchText={state.searchText}
+      onSearchTextChange={(link) => {
+        setState({
+          searchText: link,
+          searchResult: null,
+        });
+        setErrorMessage(null);
+
+        if (!link) {
+          abortControllerRef.current?.abort();
+          setIsLoading(false);
+          return;
+        }
+
+        if (!isLinkValid(link)) {
+          abortControllerRef.current?.abort();
+          setIsLoading(false);
+          setErrorMessage("Invalid link or not supported");
+          showToast(Toast.Style.Failure, "Error", "Invalid link or not supported");
+          return;
+        }
+
+        searchLinks(link);
+      }}
+      actions={
+        <ActionPanel>
+          <Action title="Open Extension Preferences" onAction={openExtensionPreferences} />
+        </ActionPanel>
+      }
       throttle
     >
-      <List.EmptyView title="Paste a Spotify Link https://open.spotify.com/track/..." />
-      {spotifyContent && (
+      {showEmptyPrompt ? (
+        <List.EmptyView title="Paste a music link (Spotify, Apple Music, Deezer, Tidal, etc.)" />
+      ) : showErrorView ? (
+        <List.EmptyView
+          icon={Icon.Warning}
+          title="Couldn't convert link"
+          description={errorMessage ?? undefined}
+          actions={
+            <ActionPanel>
+              {isLinkValid(state.searchText) && (
+                <Action
+                  title="Retry"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={Keyboard.Shortcut.Common.Refresh}
+                  onAction={() => searchLinks(state.searchText)}
+                />
+              )}
+              <Action.OpenInBrowser title="Open Website" url={getSiteUrl()} />
+              <Action title="Open Extension Preferences" onAction={openExtensionPreferences} />
+            </ActionPanel>
+          }
+        />
+      ) : (
         <>
-          <List.Section title={spotifyContentTypesTitles[spotifyContent.type]}>
-            <List.Item
-              key="spotify-content"
-              icon={{ source: spotifyContent.image }}
-              title={spotifyContent.title}
-              subtitle={spotifyContent.description}
-              actions={
-                <ActionPanel>
-                  <Action.OpenInBrowser url={`${SITE_URL}?id=${spotifyContent.id}`} />
-                  {spotifyContent.audio && (
-                    <>
-                      <Action
-                        title="Play Audio Preview"
-                        icon={Icon.Play}
-                        onAction={() => playAudio(spotifyContent.audio ?? "")}
-                      />
-                      <Action
-                        title="Stop Audio Preview"
-                        icon={Icon.Play}
-                        onAction={() => stopAudio()}
-                        shortcut={{ modifiers: ["cmd"], key: "." }}
-                      />
-                    </>
-                  )}
-                </ActionPanel>
-              }
-            />
-          </List.Section>
-          <List.Section title={spotifyContent.links.length > 0 ? "Listen on" : "Results"}>
-            {spotifyContent.links.length === 0 && (
-              <List.Item key="no-links" icon={Icon.Info} title="Not available on other platforms" />
-            )}
-            {spotifyContent.links.map(({ type, url, isVerified }) => (
+          {state.searchResult && (
+            <List.Section title={searchResultTypesTitles[state.searchResult.type]}>
               <List.Item
-                key={type}
-                icon={Icon.Link}
-                title={spotifyContentLinksTitles[type as SpotifyContentLinkType]}
-                subtitle={url}
-                accessories={[{ icon: isVerified ? Icon.CheckCircle : null }]}
+                key="spotify-content"
+                icon={{ source: state.searchResult.image }}
+                title={state.searchResult.title}
+                subtitle={state.searchResult.description}
                 actions={
                   <ActionPanel>
-                    <Action.OpenInBrowser url={url} />
-                    <Action.CopyToClipboard title="Copy Link" content={url} />
+                    <Action.OpenInBrowser url={`${getSiteUrl()}?id=${state.searchResult.universalLink}`} />
+                    {state.searchResult.audio && (
+                      <>
+                        <Action
+                          title="Play Audio Preview"
+                          icon={Icon.Play}
+                          onAction={() => playAudio(state.searchResult?.audio ?? "")}
+                        />
+                        <Action
+                          title="Stop Audio Preview"
+                          icon={Icon.Play}
+                          onAction={() => stopAudio()}
+                          shortcut={Keyboard.Shortcut.Common.Pin}
+                        />
+                      </>
+                    )}
                   </ActionPanel>
                 }
               />
-            ))}
-          </List.Section>
+            </List.Section>
+          )}
+          {state.searchResult && (
+            <List.Section title={state.searchResult.links.length > 0 ? "Listen on" : "Result"}>
+              {state.searchResult.links.length === 0 && (
+                <List.Item key="no-links" icon={Icon.Info} title="Not available on other platforms" />
+              )}
+              {state.searchResult.links.map(({ type, url, isVerified }) => (
+                <List.Item
+                  key={type}
+                  icon={Icon.Link}
+                  title={searchResultLinksTitles[type] ?? type}
+                  subtitle={url}
+                  accessories={[{ icon: isVerified ? Icon.CheckCircle : null }]}
+                  actions={
+                    <ActionPanel>
+                      <Action.OpenInBrowser url={url} />
+                      <Action.CopyToClipboard title="Copy Link" content={url} />
+                    </ActionPanel>
+                  }
+                />
+              ))}
+            </List.Section>
+          )}
         </>
       )}
     </List>

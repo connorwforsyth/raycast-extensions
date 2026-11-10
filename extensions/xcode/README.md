@@ -7,35 +7,14 @@
 <p align="center">
     Search and open your recent Xcode Projects, manage your Simulators & Apps, 
     <br/>
-    search the Apple Developer Documentation view the latest Releases and quickly clear Xcode cache files.
-    <br/><br/>
-    <a title="Install Xcode Raycast Extension" href="https://www.raycast.com/SvenTiigi/xcode#install">
-        <img height="64" style="height: 64px" src="https://assets.raycast.com/SvenTiigi/xcode/install_button@2x.png">
-    </a>    
+    create Swift Packages & Playgrounds and quickly clear Xcode cache files.
 </p>
 
-## Development
+![Search Recent Projects](metadata/xcode-1.png)
 
-Open the project in your IDE of choice and install the dependencies via:
+## Simulator Viewer
 
-```bash
-$ npm install
-```
-
-To run and test the Xcode extension locally:
-
-```bash
-$ npm run dev
-```
-
-## Project structure
-
-Inside the `/src` directory you will find the source files for this extension.
-
-| Directory      | Description                                                   |
-|----------------|---------------------------------------------------------------|
-| src/           | The Raycast commands                                          |
-| src/models     | The model definition files                                    |
-| src/services   | The services providing the core functionality for a component |
-| src/shared     | Shared functions                                              |
-| src/components | The components such as List and List.Items                    |
+Simulator launches respect the macOS default application for `devices://` links,
+including third-party viewers. No additional Raycast preference is required.
+If the link handler cannot be opened, the extension falls back to Apple's Device
+Hub or Simulator on older Xcode versions.

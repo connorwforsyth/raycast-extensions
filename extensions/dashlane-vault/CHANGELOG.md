@@ -1,5 +1,38 @@
 # Dashlane Vault Changelog
 
+## [Copy Secure Note Content] - 2026-09-19
+
+- Add an action to copy decrypted Secure Note content without saving it to Clipboard History
+
+## [Improvements] - 2026-04-21
+
+- Update dependencies
+- Improve error feedback for authentication error
+
+## [Added windows support] - 2025-12-24
+
+- Refactored dcli to support both windows and mac
+
+## [Improvements] - 2025-11-20
+
+- Update dependencies
+- Improve error feedback for Touch ID failure
+
+## [Improvements] - 2025-02-04
+
+- Add Manage devices command
+- Handle parallel CLI requests
+- Add password strength information
+- Improve error handling:
+  - CLI path is set but false
+  - Show more error information on Sync command
+
+## [Improvements] - 2024-10-25
+
+- Add frecency sorting to passwords
+- Only capture unexpected errors
+- Update dependencies
+
 ## [Improvements] - 2024-05-22
 
 - The CLI path is now required to reduce errors

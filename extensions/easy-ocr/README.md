@@ -1,6 +1,13 @@
 # Easy OCR
 
-This extension is used for generating text from screen captured images, and it requires Tesseract binary in order to work!
+This extension is used for generating text from screen captured images, detect language with Raycast AI or any few other famous libraries, and it requires Tesseract binary in order to work!
+
+## OCR engines
+
+Easy OCR can use one of two engines, chosen with the **OCR Engine** preference:
+
+- **Tesseract** (default): open source, needs a local install (see below).
+- **Apple Vision**: the engine behind macOS Live Text. It is built into macOS, so nothing needs installing. It reads Arabic noticeably better than Tesseract on small screen captures. Set the languages to read in **Apple Vision Languages** as a comma-separated list in priority order, for example `ar-SA,en-US`. If a language isn't supported by your macOS version, the extension tells you which one.
 
 ## Tesseract
 Tesseract is open source OCR engine, and it needs to be installed locally on your machine.
@@ -29,6 +36,8 @@ By default, Tesseract supports only English language, but you can install additi
 
 After installing additional languages, you need to update Easy OCR extension settings in Raycast, and set language you want to use by default.
 
+By default, this extension tries to detect language, you can disable that feature in extension options.
+
 
 ## Possible problems
 If you get Tesseract not found error make sure it is installed by running `tesseract -v` in your terminal, and if it's installed, then you need to update its path in Raycast settings.
@@ -43,4 +52,4 @@ and you will get output similar to (depends on how you installed Tesseract):
 
 Copy that value and go to *Raycast settings -> Extensions -> Paste copied value under "Tesseract binary path"*
 
-If you have any feature requests or find any bugs [PM me](https://raycastcommunity.slack.com/app_redirect?channel=@U061RQMECP9) on Raycasts Slack channel.
+If you have any feature requests or find any bugs [PM me](https://github.com/Rafo1994) on GitHub.

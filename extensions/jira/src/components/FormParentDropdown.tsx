@@ -1,8 +1,8 @@
 import { Form } from "@raycast/api";
-import { useCachedPromise } from "@raycast/utils";
 import { ForwardedRef, forwardRef, useState } from "react";
 
 import { autocompleteIssueLinks } from "../api/issues";
+import { useJiraCachedPromise } from "../hooks/useJiraCache";
 
 type FormParentDropdownProps = {
   autocompleteUrl: string;
@@ -14,7 +14,7 @@ const FormParentDropdown = forwardRef(
   ({ autocompleteUrl, projectId, epicsOnly, ...rest }: FormParentDropdownProps, ref: ForwardedRef<Form.Dropdown>) => {
     const [query, setQuery] = useState("");
 
-    const { data: issues, isLoading: isLoadingIssues } = useCachedPromise(
+    const { data: issues, isLoading: isLoadingIssues } = useJiraCachedPromise(
       async (query, epicsOnly) => {
         const result = await autocompleteIssueLinks(autocompleteUrl, {
           currentProjectId: projectId,
@@ -23,7 +23,11 @@ const FormParentDropdown = forwardRef(
           query,
         });
 
-        if (result && result.sections.length > 0) {
+        if (result && result.sections.length > 1) {
+          // Retrieve from Current Search
+          return result.sections[1].issues;
+        } else if (result && result.sections.length > 0) {
+          // Retrieve from History Search
           return result.sections[0].issues;
         }
       },

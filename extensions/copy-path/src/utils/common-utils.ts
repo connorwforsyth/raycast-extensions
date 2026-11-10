@@ -1,9 +1,13 @@
 import {
-  getChromiumBrowserPath,
   copyFirefoxBrowserPath,
-  getFocusFinderPath,
-  getFocusWindowTitle,
   copySafariWebAppPath,
+  getChromiumBrowserPath,
+  getFocusFinderPath,
+  getFocusWindowPath,
+  getFocusWindowTitle,
+  getQSpacePathUrls,
+  getArcFocusedPageUrl,
+  getVSCodeActiveFilePath,
   getWebkitBrowserPath,
 } from "./applescript-utils";
 import {
@@ -16,82 +20,205 @@ import {
   showToast,
   Toast,
   updateCommandMetadata,
+  getPreferenceValues,
 } from "@raycast/api";
-import { chromiumBrowserNames, webkitBrowserNames } from "./constants";
-import { copyUrlContent, multiPathSeparator, showCopyTip, showLastCopy, showTabTitle } from "../types/preferences";
+import {
+  copyUrlContent,
+  copyWhenUnSupported,
+  multiPathSeparator,
+  showCopyTip,
+  showHudEmoji,
+  showLastCopy,
+  showTabTitle,
+} from "../types/preferences";
 import parseUrl from "parse-url";
+import { formatHomePath, formatPathHUD } from "./path-format";
+import { getSelectedPickerPaths } from "./picker-selection";
+import * as os from "node:os";
+import { arcBundleId, firefoxBrowsers, vsCodeBundleIds } from "./constants";
 
-export const copyFinderPath = async () => {
-  const finderPath = await getFocusFinderPath();
-  const finalPath = finderPath.endsWith("/") && finderPath.length !== 1 ? finderPath.slice(0, -1) : finderPath;
-  await Clipboard.copy(finalPath);
-  await showSuccessHUD("📂 " + finalPath);
-  await customUpdateCommandMetadata(finalPath);
+export const isEmpty = (string: string | null | undefined) => {
+  return !(string != null && String(string).length > 0);
 };
 
-export const customUpdateCommandMetadata = async (content: string) => {
-  if (showLastCopy) {
-    await updateCommandMetadata({ subtitle: content });
-  } else {
-    await updateCommandMetadata({ subtitle: "Copy Path" });
+const qSpaceUrlToPath = (url: string) => {
+  if (!url.startsWith("file://")) {
+    return url;
+  }
+
+  try {
+    return decodeURIComponent(new URL(url).pathname);
+  } catch {
+    try {
+      return decodeURIComponent(url.replace(/^file:\/\/(?:localhost)?/, ""));
+    } catch {
+      return url;
+    }
   }
 };
 
-export const copyPath = async () => {
-  // get finder path
-  try {
-    const fileSystemItems = await getSelectedFinderItems();
-    if (fileSystemItems.length === 0) {
-      await copyFinderPath();
-    } else {
-      const filePaths = fileSystemItems.map((item) =>
-        item.path.endsWith("/") && item.path.length !== 1 ? item.path.slice(0, -1) : item.path,
-      );
+export const copyQSpacePath = async () => {
+  const { useTildeForHome } = await getPreferenceValues();
+  const urls = await getQSpacePathUrls();
+  const paths = urls
+    .split(/\r?\n/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map(qSpaceUrlToPath);
 
-      const output = filePaths.join(multiPathSeparator);
-      await Clipboard.copy(output);
-      await showSuccessHUD(filePaths.length > 1 ? "📑 " + filePaths[0] + "..." : "📄 " + filePaths[0]);
-      await customUpdateCommandMetadata(output);
-    }
+  if (paths.length === 0) {
+    await showFailureHUD({ title: "Nothing to Copy", style: Toast.Style.Failure });
+    return "";
+  }
+
+  const formatted = paths.map((path) => formatHomePath(path, useTildeForHome, os.homedir()));
+  const path = formatted.join(multiPathSeparator);
+  await Clipboard.copy(path);
+  await showSuccessHUD(formatPathHUD(formatted, "📂", showHudEmoji !== false));
+  await customUpdateCommandMetadata(
+    paths.map((path) => formatHomePath(path, true, os.homedir())).join(multiPathSeparator),
+  );
+  return path;
+};
+
+export const copyFinderPath = async () => {
+  const { useTildeForHome } = getPreferenceValues();
+  try {
+    const items = await getSelectedFinderItems();
+    const paths = items.length ? items.map((item) => item.path) : [await getFocusFinderPath()];
+    const formatted = paths.map((path) => formatHomePath(path, useTildeForHome, os.homedir()));
+    const content = formatted.join(multiPathSeparator);
+    await Clipboard.copy(content);
+    await showSuccessHUD(formatPathHUD(formatted, items.length ? "📄" : "📂", showHudEmoji !== false));
+    await customUpdateCommandMetadata(
+      paths.map((path) => formatHomePath(path, true, os.homedir())).join(multiPathSeparator),
+    );
   } catch (e) {
-    await copyFinderPath();
     console.error(String(e));
   }
 };
-export const copyUrl = async (frontmostApp: Application) => {
-  // get browser web page url
-  let url = "";
-  let shouldCopy = true; // if it has copied in copy***Path, then do not copy again
+
+export const copySelectedPickerPath = async (app: Application) => {
+  const paths = await getSelectedPickerPaths(app);
+  if (paths.length === 0) return false;
+  const { useTildeForHome } = getPreferenceValues();
+  const formatted = paths.map((path) => formatHomePath(path, useTildeForHome, os.homedir()));
+  const content = formatted.join(multiPathSeparator);
+  await Clipboard.copy(content);
+  await showSuccessHUD(formatPathHUD(formatted, "📄", showHudEmoji !== false));
+  await customUpdateCommandMetadata(content);
+  return true;
+};
+
+export const copyWindowPath = async (app: Application) => {
+  const { useTildeForHome } = await getPreferenceValues();
+  let path = vsCodeBundleIds.includes(app.bundleId ?? "") ? await getVSCodeActiveFilePath(app) : "";
+  if (isEmpty(path)) {
+    path = await getFocusWindowPath(app);
+  }
+  if (useTildeForHome) {
+    path = path.replace(os.homedir(), "~");
+  }
+  if (!isEmpty(path)) {
+    await Clipboard.copy(path);
+    await showSuccessHUD(formatPathHUD([path], "📂", showHudEmoji !== false));
+    await customUpdateCommandMetadata(path);
+  }
+  return path;
+};
+
+const tryCopyBrowserUrl = async (app: Application) => {
+  // Arc: Little Arc windows and Peek previews are not reachable through Arc's
+  // scripting dictionary, so read the focused web area first; otherwise the
+  // underlying tab of the main window would be copied.
+  let url = app.bundleId === arcBundleId ? await getArcFocusedPageUrl() : "";
+  // get extra browser web page url
+  if (isEmpty(url)) {
+    url = await getChromiumBrowserPath(app.name);
+  }
+  if (isEmpty(url)) {
+    url = await getWebkitBrowserPath(app.name);
+  }
+  return url;
+};
+
+export const copyUnSupportedAppContent = async (app: Application) => {
+  let hudIcon: string;
   let copyContent: string;
-  if (webkitBrowserNames.includes(frontmostApp.name)) {
-    url = await getWebkitBrowserPath(frontmostApp.name);
-  } else if (chromiumBrowserNames.includes(frontmostApp.name)) {
-    url = await getChromiumBrowserPath(frontmostApp.name);
-  } else if (frontmostApp.name.toLowerCase().includes("firefox")) {
-    url = await copyFirefoxBrowserPath(frontmostApp.name);
-    shouldCopy = false;
-  } else if (frontmostApp.bundleId?.startsWith("com.apple.Safari.WebApp")) {
-    url = await copySafariWebAppPath(frontmostApp.name);
-    shouldCopy = false;
-  }
-
-  if (url === "") {
-    const windowTitle = await getFocusWindowTitle();
-    copyContent = windowTitle;
-    await showSuccessHUD("🖥️ " + windowTitle);
-  } else {
-    // handle url
-    copyContent = parseURL(url);
-    if (showTabTitle) {
-      const windowTitle = await getFocusWindowTitle();
-      copyContent = `${windowTitle}\n${copyContent}`;
+  let shouldCopy = true;
+  switch (copyWhenUnSupported) {
+    case "windowTitle": {
+      hudIcon = "🖥️ ";
+      copyContent = await getFocusWindowTitle(app);
+      break;
     }
-    await showSuccessHUD("🔗 " + copyContent);
-    await customUpdateCommandMetadata(copyContent);
+    case "appName": {
+      hudIcon = "💻 ";
+      copyContent = app.name;
+      break;
+    }
+    case "appPath": {
+      hudIcon = "📂 ";
+      copyContent = app.path;
+      break;
+    }
+    case "bundleId": {
+      hudIcon = "🪪 ";
+      copyContent = app.bundleId ?? "";
+      break;
+    }
+    default: {
+      hudIcon = "";
+      copyContent = "";
+      shouldCopy = false;
+      break;
+    }
   }
-
   if (shouldCopy) {
     await Clipboard.copy(copyContent);
+    await showSuccessHUD((showHudEmoji !== false ? hudIcon : "") + copyContent);
+    await customUpdateCommandMetadata(copyContent);
+  } else {
+    await showFailureHUD({ title: "Nothing to Copy", style: Toast.Style.Failure });
+  }
+  return copyContent;
+};
+
+export const copyBrowserTabUrl = async (frontmostApp: Application) => {
+  // get browser web page url
+  let url = await tryCopyBrowserUrl(frontmostApp);
+  let shouldCopy = true; // if it has copied in copy***Path, then do not copy again
+  let copyContent: string;
+  console.log(url);
+  console.log(frontmostApp);
+  if (isEmpty(url)) {
+    if (firefoxBrowsers.includes(frontmostApp.name.toLowerCase())) {
+      url = await copyFirefoxBrowserPath(frontmostApp.name);
+    } else if (frontmostApp.bundleId?.startsWith("com.apple.Safari.WebApp")) {
+      url = await copySafariWebAppPath(frontmostApp.name);
+    }
+    shouldCopy = false;
+  }
+
+  if (isEmpty(url)) {
+    return url;
+  } else {
+    try {
+      // handle url
+      copyContent = parseURL(url);
+      if (showTabTitle) {
+        const windowTitle = await getFocusWindowTitle(frontmostApp);
+        copyContent = `${windowTitle}\n${copyContent}`;
+      }
+      if (shouldCopy) {
+        await Clipboard.copy(copyContent);
+      }
+      await showSuccessHUD((showHudEmoji !== false ? "🔗 " : "") + copyContent);
+      await customUpdateCommandMetadata(new URL(url).hostname);
+      return url;
+    } catch (e) {
+      return url;
+    }
   }
 };
 
@@ -116,6 +243,14 @@ const parseURL = (url: string) => {
   return url;
 };
 
+export const customUpdateCommandMetadata = async (content: string) => {
+  if (showLastCopy) {
+    await updateCommandMetadata({ subtitle: content });
+  } else {
+    await updateCommandMetadata({ subtitle: "Copy Path" });
+  }
+};
+
 export const showLoadingHUD = async (title: string) => {
   if (showCopyTip) {
     await showToast({ title: title, style: Toast.Style.Animated });
@@ -128,5 +263,11 @@ export const showSuccessHUD = async (
 ) => {
   if (showCopyTip) {
     await showHUD(title, options);
+  }
+};
+
+export const showFailureHUD = async (options: Toast.Options) => {
+  if (showCopyTip) {
+    await showToast(options);
   }
 };

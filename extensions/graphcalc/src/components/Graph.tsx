@@ -1,160 +1,248 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Detail, Toast, showToast } from "@raycast/api";
-import { evaluate } from "mathjs";
+import React from "react";
 import {
-  XYPlot,
-  XAxis,
-  YAxis,
-  HorizontalGridLines,
-  VerticalGridLines,
-  LineSeries,
-} from "react-vis";
-import ReactDOMServer from "react-dom/server";
-import "react-vis/dist/style.css";
+  Detail,
+  ActionPanel,
+  Action,
+  Icon,
+  Keyboard,
+  environment,
+  showToast,
+  Toast,
+} from "@raycast/api";
+import { showFailureToast } from "@raycast/utils";
+import { useGraphData } from "../hooks/useGraphData";
+import { useGraphNavigation } from "../hooks/useGraphNavigation";
+import { useTheme } from "../hooks/useTheme";
+import { CARD_WIDTH, renderGraphToSVG } from "../utils/renderUtils";
+import { THEME_INFO, themeFor } from "../lib/themes";
+import {
+  SHARE_SCALE,
+  ShareMode,
+  canShareImage,
+  shareGraphImage,
+} from "../lib/share";
+import { GraphProps } from "../types";
 
-interface GraphProps {
-  expression: string;
-  onGraphLoaded?: () => void; // New prop for handling graph loaded callback
+type Keys = { modifiers: Keyboard.KeyModifier[]; key: Keyboard.KeyEquivalent };
+
+/**
+ * A shortcut declared for both platforms. Raycast ignores shortcuts with an
+ * ambiguous modifier (`cmd`, `ctrl`) on the other platform, so both variants
+ * are spelled out. When `windows` is omitted it mirrors `macOS` with ⌘→Ctrl.
+ *
+ * Some macOS shortcuts cannot map 1:1: Raycast for Windows reserves
+ * Ctrl+Shift+arrows (reorder favorites), Ctrl+Shift+↵, Ctrl+Shift+, and
+ * Ctrl+Shift+D and silently drops actions that claim them, and punctuation
+ * keys depend on the keyboard layout there. Those get an explicit Windows
+ * variant using letters or Ctrl+Alt.
+ */
+function shortcut(macOS: Keys, windows?: Keys): Keyboard.Shortcut {
+  const win = windows ?? {
+    key: macOS.key,
+    modifiers: macOS.modifiers.map((m) => (m === "cmd" ? "ctrl" : m)),
+  };
+  return { macOS, Windows: win };
 }
 
-function parseExpression(expression: string, xValues: number[]) {
-  return xValues.map((x) => {
-    try {
-      const result = evaluate(expression, { x });
-      if (result === Infinity) {
-        return Number.MAX_VALUE;
-      } else if (result === -Infinity) {
-        return -Number.MAX_VALUE;
-      }
-      return result;
-    } catch (error) {
-      console.error("Evaluation error:", error);
-      return NaN;
-    }
-  });
-}
+const SHORTCUTS = {
+  moveUp: shortcut(
+    { modifiers: ["cmd", "shift"], key: "arrowUp" },
+    { modifiers: ["ctrl", "alt"], key: "arrowUp" },
+  ),
+  moveDown: shortcut(
+    { modifiers: ["cmd", "shift"], key: "arrowDown" },
+    { modifiers: ["ctrl", "alt"], key: "arrowDown" },
+  ),
+  moveLeft: shortcut(
+    { modifiers: ["cmd", "shift"], key: "arrowLeft" },
+    { modifiers: ["ctrl", "alt"], key: "arrowLeft" },
+  ),
+  moveRight: shortcut(
+    { modifiers: ["cmd", "shift"], key: "arrowRight" },
+    { modifiers: ["ctrl", "alt"], key: "arrowRight" },
+  ),
+  resetView: shortcut(
+    { modifiers: ["cmd", "shift"], key: "." },
+    { modifiers: ["ctrl", "shift"], key: "r" },
+  ),
+  nextTheme: shortcut(
+    { modifiers: ["cmd", "shift"], key: ";" },
+    { modifiers: ["ctrl", "shift"], key: "t" },
+  ),
+  switchTheme: shortcut({ modifiers: ["cmd"], key: "t" }),
+  pasteImage: shortcut({ modifiers: ["cmd", "shift"], key: "v" }),
+  saveImage: shortcut({ modifiers: ["cmd", "shift"], key: "s" }),
+};
 
-function renderGraphToSVG(
-  expression: string,
-  chartData: { x: number; y: number }[],
-) {
-  try {
-    return ReactDOMServer.renderToStaticMarkup(
-      <svg viewBox="0 0 920 400" xmlns="http://www.w3.org/2000/svg">
-        <g transform="translate(40,150)">
-          <rect
-            width="920"
-            height="400"
-            style={{ fill: "transparent", stroke: "#000000" }}
-          />
-          <XYPlot width={920} height={400} style={{ color: "#000000" }}>
-            <HorizontalGridLines style={{ stroke: "#e0e0e0" }} />
-            <VerticalGridLines style={{ stroke: "#e0e0e0" }} />
-            <XAxis style={{ stroke: "#777777" }} />
-            <YAxis style={{ stroke: "#777777" }} />
-            <LineSeries
-              data={chartData}
-              style={{ stroke: "#F5B041", strokeWidth: 2, fill: "transparent" }}
-            />
-          </XYPlot>
-        </g>
-      </svg>,
+const Graph: React.FC<GraphProps> = ({ expression }) => {
+  const {
+    dataSegments,
+    result,
+    svgRendered,
+    error,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    setXMin,
+    setXMax,
+    setYMin,
+    setYMax,
+  } = useGraphData(expression);
+
+  const { zoomIn, zoomOut, moveLeft, moveRight, moveUp, moveDown, resetView } =
+    useGraphNavigation(
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      setXMin,
+      setXMax,
+      setYMin,
+      setYMax,
     );
-  } catch (error) {
-    console.error("SVG rendering error:", error);
-    return "";
-  }
-}
 
-const Graph: React.FC<GraphProps> = ({ expression, onGraphLoaded }) => {
-  const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
-  const [result, setResult] = useState<string | null>(null);
-  const [svgRendered, setSvgRendered] = useState<boolean>(false);
-  const toastRef = useRef<Toast | null>(null);
+  const { theme, setTheme, nextTheme } = useTheme();
+  const graphTheme = themeFor(theme, environment.appearance);
 
-  useEffect(() => {
-    const isSimpleEquation =
-      /^\s*([-+]?\d+(\.\d+)?\s*([-+*/]\s*([-+]?\d+(\.\d+)?))*)\s*$/.test(
-        expression,
-      );
-    const xValues = Array.from({ length: 100 }, (_, i) => (i - 50) / 10);
-    const yValues = parseExpression(expression, xValues);
-    const data = xValues.map((x, i) => ({ x, y: yValues[i] }));
+  const cycleTheme = () => {
+    const next = nextTheme();
+    showToast({
+      style: Toast.Style.Success,
+      title: "Theme Changed",
+      message: `Graph theme set to ${THEME_INFO.find((t) => t.id === next)?.title ?? next}.`,
+    });
+  };
 
-    const showGeneratingToast = async () => {
-      const newToast = await showToast({
-        style: Toast.Style.Animated,
-        title: "Generating Chart",
-        message: `Rendering graph for the expression: ${expression}`,
-      });
-      toastRef.current = newToast;
-    };
+  /** The on-screen card, at export resolution. */
+  const shareSvg = () =>
+    renderGraphToSVG(
+      expression,
+      dataSegments,
+      [xMin, xMax],
+      [yMin, yMax],
+      graphTheme,
+      { displayWidth: CARD_WIDTH * SHARE_SCALE, title: expression },
+    );
 
-    const closeGeneratingToast = () => {
-      if (toastRef.current) {
-        toastRef.current.hide();
-        toastRef.current = null;
-      }
-    };
-
-    const handleSimpleEquation = () => {
-      try {
-        const calculatedResult = evaluate(expression);
-        setResult(calculatedResult.toString());
-        showToast({
-          style: Toast.Style.Success,
-          title: "Calculation Successful",
-          message: `${expression} = ${calculatedResult}`,
-        });
-      } catch (error) {
-        setResult("Error: Invalid expression");
-        showToast({
-          style: Toast.Style.Failure,
-          title: "Calculation Error",
-          message:
-            "The expression could not be evaluated. Please check the syntax.",
-        });
-      }
-    };
-
-    const handleComplexExpression = async () => {
-      await showGeneratingToast();
-      setChartData(data);
-      setResult(null);
-      closeGeneratingToast();
-    };
-
-    if (isSimpleEquation) {
-      handleSimpleEquation();
-    } else {
-      handleComplexExpression();
+  const shareImage = async (mode: ShareMode) => {
+    try {
+      await shareGraphImage(shareSvg(), mode, expression);
+    } catch (error) {
+      await showFailureToast(error, { title: "Could not render the image" });
     }
-
-    return () => {
-      closeGeneratingToast();
-    };
-  }, [expression]);
-
-  useEffect(() => {
-    if (chartData.length > 0) {
-      setSvgRendered(true);
-      if (onGraphLoaded) {
-        // Call onGraphLoaded callback when graph is loaded
-        onGraphLoaded();
-      }
-    }
-  }, [chartData, onGraphLoaded]);
+  };
 
   return (
     <Detail
       markdown={
-        result !== null
-          ? `## Result\n\n${expression} = ${result}`
-          : svgRendered
-            ? `## Graph of ${expression}\n\n<img src="data:image/svg+xml;utf8,${encodeURIComponent(
-                renderGraphToSVG(expression, chartData),
-              )}" alt="Graph" />`
-            : ""
+        error
+          ? `## Error\n\n${error}`
+          : result !== null
+            ? `\\[${expression} = ${result}\\]`
+            : svgRendered
+              ? `<img src="data:image/svg+xml;base64,${Buffer.from(
+                  renderGraphToSVG(
+                    expression,
+                    dataSegments,
+                    [xMin, xMax],
+                    [yMin, yMax],
+                    graphTheme,
+                    { title: expression },
+                  ),
+                ).toString("base64")}" alt="Graph" />`
+              : `$$${expression}$$\n\n`
+      }
+      actions={
+        !error &&
+        result === null && (
+          <ActionPanel>
+            <ActionPanel.Section>
+              {/* "In", "Out" and "Up" are part of the verb here, not prepositions, so Title Case keeps them capitalized. */}
+              {/* eslint-disable-next-line @raycast/prefer-title-case */}
+              <Action title="Zoom In" onAction={zoomIn} />
+              {/* eslint-disable-next-line @raycast/prefer-title-case */}
+              <Action title="Zoom Out" onAction={zoomOut} />
+              <Action
+                // eslint-disable-next-line @raycast/prefer-title-case
+                title="Move Up"
+                onAction={moveUp}
+                shortcut={SHORTCUTS.moveUp}
+              />
+              <Action
+                title="Move Down"
+                onAction={moveDown}
+                shortcut={SHORTCUTS.moveDown}
+              />
+              <Action
+                title="Move Left"
+                onAction={moveLeft}
+                shortcut={SHORTCUTS.moveLeft}
+              />
+              <Action
+                title="Move Right"
+                onAction={moveRight}
+                shortcut={SHORTCUTS.moveRight}
+              />
+              <Action
+                title="Reset View"
+                onAction={resetView}
+                shortcut={SHORTCUTS.resetView}
+              />
+            </ActionPanel.Section>
+            <ActionPanel.Section title="Share">
+              {canShareImage && (
+                <>
+                  <Action
+                    title="Copy Image"
+                    icon={Icon.Image}
+                    shortcut={Keyboard.Shortcut.Common.Copy}
+                    onAction={() => shareImage("copy")}
+                  />
+                  <Action
+                    title="Paste Image"
+                    icon={Icon.Clipboard}
+                    shortcut={SHORTCUTS.pasteImage}
+                    onAction={() => shareImage("paste")}
+                  />
+                  <Action
+                    title="Save Image to Downloads"
+                    icon={Icon.Download}
+                    shortcut={SHORTCUTS.saveImage}
+                    onAction={() => shareImage("save")}
+                  />
+                </>
+              )}
+              <Action.CopyToClipboard
+                title="Copy SVG"
+                icon={Icon.Code}
+                content={shareSvg()}
+              />
+            </ActionPanel.Section>
+            <ActionPanel.Section title="Theme">
+              <Action
+                title="Next Theme"
+                icon={Icon.Brush}
+                onAction={cycleTheme}
+                shortcut={SHORTCUTS.nextTheme}
+              />
+              <ActionPanel.Submenu
+                title="Switch Theme"
+                icon={Icon.Brush}
+                shortcut={SHORTCUTS.switchTheme}
+              >
+                {THEME_INFO.map((t) => (
+                  <Action
+                    key={t.id}
+                    title={t.title}
+                    icon={theme === t.id ? Icon.CheckCircle : Icon.Circle}
+                    onAction={() => setTheme(t.id)}
+                  />
+                ))}
+              </ActionPanel.Submenu>
+            </ActionPanel.Section>
+          </ActionPanel>
+        )
       }
     />
   );

@@ -7,14 +7,21 @@ import {
   Alert,
   getPreferenceValues,
   Keyboard,
+  LaunchType,
   LocalStorage,
   showToast,
 } from "@raycast/api";
+import { createDeeplink, DeeplinkType } from "@raycast/utils";
 import { setStorage, getStorage } from "./lib/storage";
 import { Direction, StorageKey } from "./lib/constants";
 import { Group, deleteGroup, useGroups } from "./lib/Groups";
-import { Pin, openPin, usePins } from "./lib/Pins";
-import { addIDAccessory, addParentGroupAccessory, addSortingStrategyAccessory } from "./lib/accessories";
+import { Pin, usePins } from "./lib/Pins";
+import {
+  addIDAccessory,
+  addParentGroupAccessory,
+  addSortingStrategyAccessory,
+  addVisibilityAccessory,
+} from "./lib/accessories";
 import { getGroupIcon } from "./lib/icons";
 import GroupForm from "./components/GroupForm";
 import { InstallExamplesAction } from "./components/actions/InstallExamplesAction";
@@ -22,6 +29,8 @@ import { useEffect, useState } from "react";
 import CopyGroupActionsSubmenu from "./components/actions/CopyGroupActionsSubmenu";
 import { ExtensionPreferences, ViewGroupsPreferences } from "./lib/preferences";
 import { pluralize } from "./lib/utils";
+import BulkImportUrlsForm from "./components/BulkImportUrlsForm";
+import { openPinGroup } from "./lib/openPinGroup";
 
 /**
  * Action to create a new group. Opens a form view with blank/default fields.
@@ -61,13 +70,13 @@ const moveGroup = async (index: number, dir: Direction, setGroups: React.Dispatc
  */
 export default function ViewGroupsCommand() {
   const { groups, setGroups, revalidateGroups } = useGroups();
-  const { pins } = usePins();
-  const [examplesInstalled, setExamplesInstalled] = useState<LocalStorage.Value | undefined>(true);
+  const { pins, revalidatePins } = usePins();
+  const [examplesInstalled, setExamplesInstalled] = useState<boolean>(true);
   const preferences = getPreferenceValues<ExtensionPreferences & ViewGroupsPreferences>();
 
   useEffect(() => {
     Promise.resolve(LocalStorage.getItem(StorageKey.EXAMPLE_GROUPS_INSTALLED)).then((examplesInstalled) => {
-      setExamplesInstalled(examplesInstalled);
+      setExamplesInstalled(examplesInstalled === 1);
     });
   }, []);
 
@@ -91,8 +100,15 @@ export default function ViewGroupsCommand() {
       <List.EmptyView title="No Groups Found" icon="no-view.png" />
       {((groups as Group[]) || []).map((group, index) => {
         const groupPins = pins.filter((pin: Pin) => pin.group == group.name);
+        const deeplink = createDeeplink({
+          type: DeeplinkType.Extension,
+          command: "open-pin-group",
+          launchType: LaunchType.Background,
+          arguments: { groupId: group.id.toString() },
+        });
         const maxID = Math.max(...groups.map((group) => group.id));
         const accessories: List.Item.Accessory[] = [];
+        if (preferences.showVisibility) addVisibilityAccessory(group, accessories, true);
         if (preferences.showSortStrategy) addSortingStrategyAccessory(group, accessories);
         if (preferences.showIDs) addIDAccessory(group, accessories, maxID);
         if (preferences.showParentGroup) addParentGroupAccessory(group, accessories, groups);
@@ -111,11 +127,7 @@ export default function ViewGroupsCommand() {
                     title={`Open ${groupPins.length} ${pluralize("Pin", groupPins.length)}`}
                     icon={Icon.ChevronRight}
                     onAction={async () => {
-                      await Promise.all(
-                        groupPins.map(async (pin) => {
-                          await openPin(pin, preferences);
-                        }),
-                      );
+                      await openPinGroup(group.id);
                     }}
                   />
                   <Action.Push
@@ -123,6 +135,17 @@ export default function ViewGroupsCommand() {
                     icon={Icon.Pencil}
                     target={<GroupForm group={group} setGroups={setGroups as (groups: Group[]) => void} />}
                     shortcut={Keyboard.Shortcut.Common.Edit}
+                  />
+                  <Action.CreateQuicklink
+                    title="Create Group Quicklink"
+                    icon={Icon.Link}
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "q" }}
+                    quicklink={{ name: `Open ${group.name}`, link: deeplink }}
+                  />
+                  <Action.Push
+                    title="Import URLs"
+                    icon={Icon.Download}
+                    target={<BulkImportUrlsForm group={group} onImported={revalidatePins} />}
                   />
 
                   <Action
@@ -233,7 +256,7 @@ export default function ViewGroupsCommand() {
                     kind="groups"
                   />
                 ) : null}
-                <CopyGroupActionsSubmenu group={group} groups={groups} pins={pins} />
+                <CopyGroupActionsSubmenu group={group} groups={groups} pins={pins} deeplink={deeplink} />
               </ActionPanel>
             }
           />

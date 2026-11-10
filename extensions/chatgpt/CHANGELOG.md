@@ -1,5 +1,133 @@
 # Changelog
 
+## [Fix Crash on Launch] - 2026-10-16
+
+- Fix every command crashing on launch with `Package subpath './_shims/auto/runtime' is not defined by "exports"` by upgrading the OpenAI SDK from v4 to v7: [#32288](https://github.com/raycast/extensions/issues/32288)
+- The proxy setting now also applies to the image commands.
+
+## [Fix] - 2026-10-14
+
+- Fix: `Fix Spelling and Grammar` and `Improve Writing` shipped with a `temperature` of `0.7` on `gpt-5-nano`, a reasoning model that only supports the default temperature, causing every run to fail with a 400 error. Default temperature for these commands is now `1`.
+- Automatically retry without the `temperature` parameter when the API rejects it as unsupported for the selected model, mirroring the existing fallback for an unsupported `reasoning_effort`, so commands with a stale or incompatible saved temperature still complete instead of failing outright.
+
+## [Added new screenshots] - 2026-10-13
+
+## [Keep Recent Turns in Long Conversations] - 2026-10-13
+
+- When a conversation is longer than the context budget, send the most recent turns instead of the oldest ones, so follow-up questions keep their context: [#32123](https://github.com/raycast/extensions/issues/32123)
+
+## [Separate Chat Models and AI Commands] - 2026-09-17
+
+- Show base models in Ask Question, Full Text Input and Summarize Website. Add Ask with This Command in Models to start a command conversation.
+- Preserve command settings when continuing a conversation and identify the command with a `Command:` prefix. Saved conversations retain their settings if the command is deleted.
+- Keep the last selected base model when starting or continuing a command conversation. Resolve old command selections to their base model, or Default when unavailable.
+
+## [Feature] - 2026-09-15
+
+- Create and edit AI commands in Models, including creating a command from the selected model.
+- Remove the standalone Create AI Command entry. Create commands through the Models action menu; replace shortcuts or deep links to the removed entry with Models.
+- Rename Search AI Command to AI Commands, preserving existing command shortcuts and quicklinks.
+- Let commands configure their own model settings or inherit a base model with per-setting overrides; migrate existing commands independently without adding presets or changing their settings.
+- Add navigation from Models to Ask and editing from Ask, retaining model selection, drafts and existing messages.
+- Keep Ask's remembered model when continuing an AI command or a saved conversation; update it only when a model is explicitly selected.
+- Keep model and command edits synchronized across open forms, and prevent removal of models still used by commands.
+- Preserve newer model and command settings when saving from a previously opened command.
+- Pin and unpin models without overwriting newer settings or restoring deleted models.
+- Use platform-appropriate shortcuts for creating, editing and duplicating models and AI commands on macOS and Windows.
+
+## [Feature] - 2026-09-11
+
+- Model and AI Command forms now combine API model discovery and manual model ID entry in one searchable dropdown.
+- Removed the separate `Custom model` preference; saved model IDs remain available when model discovery fails or omits them.
+- Model management no longer waits for the remote model list; each form loads its own options in the background.
+
+## [Fix] - 2026-09-10
+
+- Fix: Reuse Raycast's HTTP(S) agents when no custom proxy is configured, so the system certificate store is trusted and OpenAI-compatible endpoints behind a TLS-inspecting corporate proxy work
+
+## [Feature] - 2026-03-09
+
+- Feature: Added a per-model `Reasoning` toggle with an `Effort` selector (`none`, `low`, `medium`, `high`) in the model form.
+- Feature: Added support for passing `reasoning_effort` in Chat Completions requests only when the reasoning override is enabled.
+- Fix: Added automatic one-time retry without `reasoning_effort` when OpenAI-compatible providers do not support that parameter.
+- Feature: Change all occurence of `gpt-4o-mini` and the like to `gpt-5-nano`, as the latter is cheaper, more capable and more efficient.
+
+## [Added Windows Support] - 2025-12-16
+
+## [Feature] - 2025-12-08
+
+- Windows 11 support: vision commands can read selected images from File Explorer; app icon resolution falls back to executable paths on Windows.
+
+## [Fix] - 2025-04-14
+
+- Fix: Actions such as copy, save, and speak were unavailable in chat messages of previous conversations.
+
+## [Feature] - 2025-02-23
+
+- Fix: Fixed the error display issue: errors are now always fully readable and rendered correctly in their respective places.
+- Fix: Fixed the issue when some errors may not be displayed in the UI.
+- Feature: Added a tip to help users understand how to discuss the results of the AI command in chat.
+- Feature: Refactored error messages. Now, they are more informative and user-friendly.
+
+## [Feature] - 2025-01-22
+
+- Feature: Introduced a method to dynamically create new commands for processing user text input from various sources, including selected text, clipboard text, and open web pages.
+- Feature: Added new commands: "Fix Spelling and Grammar" and "Improve Writing".
+
+## [Feature] - 2025-01-01
+
+- Feature: Added import/export functionality to Conversations.
+
+## [Fix] - 2025-01-01
+
+- Fix: Fixed o1 models not working, and added a prompt warning for o1 models.
+
+## [Fix] - 2024-11-24
+
+- Fix: Fixed Images not rendering if their paths have spaces in them.
+
+## [Feature] - 2024-10-09
+
+- Feature: Added import/export functionality to Models to prevent potential data loss and alleviate data anxiety.
+- Feature: Introduced a new reusable import/export module, so that it can be used in other parts of the extension in the future.
+
+## [Fix] - 2024-10-09
+
+- Fix: Modified the `useModel` initialization process to update `localStorage` only after initialization is complete, preventing data overwrite. Addresses issues #8977, #14356, and #14125.
+- Chore: Removed `List.EmptyView` when the model list is empty, as the Action panel would remain empty and default models ensure the model list is not empty.
+
+## [Feature] - 2024-10-06
+
+- Feature: Change all occurence of `gpt-3.5` and the like to `gpt-4o-mini`, as the latter is cheaper and more efficient.
+- Feature: Update `setOption` to include all model IDs, removing the filter for 'gpt' prefix. (To support `o1` models).
+- Chore: Remove unnecessary union type literals in `src/type.ts:Model.option`, since 'option' was already effectively a 'string'.
+
+## [Feature] - 2024-09-02
+
+- Feature: Support for certain platforms that only accept simple string formats, such as DeepSeek.
+
+## [Feature] - 2024-08-26
+
+- Feature: Support custom vision model name
+
+## [Fix] - 2024-08-13
+
+- Fix: the image width calculation in AnswerDetailView, which previously returned undefined.
+- Update package-lock.json to fix the security vulnerability (npm audit fix)
+
+## [Fix] - 2024-08-09
+
+- Fix: An unhandled error was encountered while parsing the CSV file.
+- Chore: Update prompts.csv URL to the latest version
+
+## [Fix] - 2024-07-29
+
+- Restarting a conversation will retain the currently selected model
+
+## [Fix] - 2024-07-16
+
+- Add placeholder to improve accessibility
+
 ## [Feature] - 2024-06-13
 
 - Feature: Add Vision Command Capability on Clipboard Image

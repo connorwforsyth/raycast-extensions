@@ -1,16 +1,17 @@
 import { ShowAttributesAction } from "@components/entity";
-import { useHAStates } from "@components/hooks";
+import { useHAStates, useVisibleHAStates } from "@components/hooks";
 import { useStateSearch } from "@components/state/hooks";
 import { StateListItem } from "@components/state/list";
 import { PrimaryIconColor } from "@components/state/utils";
+import { partitionFavoriteStates, useEntityOverrides } from "@lib/entity-overrides";
 import { ha } from "@lib/common";
 import { State } from "@lib/haapi";
 import { getStateTooltip } from "@lib/utils";
 import { Action, ActionPanel, List, showToast, Toast } from "@raycast/api";
-import { useState } from "react";
+import React, { useState } from "react";
 import { HACSRepo } from "./utils";
 
-function HACSUpdateItem(props: { repo: HACSRepo | undefined; state: State }): JSX.Element | null {
+function HACSUpdateItem(props: { repo: HACSRepo | undefined; state: State }): React.ReactElement | null {
   const r = props.repo;
   if (!r || !r.display_name || !r.available_version || !r.name) {
     return null;
@@ -36,19 +37,27 @@ function HACSUpdateItem(props: { repo: HACSRepo | undefined; state: State }): JS
   );
 }
 
-function HACSUpdateItems(props: { state: State | undefined }): JSX.Element | null {
+function HACSUpdateItems(props: { state: State | undefined }): React.ReactElement | null {
   const s = props.state;
   if (!s) {
     return null;
   }
   const repos: HACSRepo[] | undefined = s.attributes.repositories;
-  return <>{repos?.map((r, i) => <HACSUpdateItem key={i} repo={r} state={s} />)}</>;
+  return (
+    <>
+      {repos?.map((r, i) => (
+        <HACSUpdateItem key={i} repo={r} state={s} />
+      ))}
+    </>
+  );
 }
 
-export function UpdatesList(): JSX.Element {
+export function UpdatesList(): React.ReactElement {
   const [searchText, setSearchText] = useState<string>();
-  const { states: allStates, error, isLoading } = useHAStates();
-  const { states } = useStateSearch(searchText, "update", "", allStates);
+  const { states: allStates, error, isLoading } = useVisibleHAStates();
+  const { states: allStatesUnfiltered } = useHAStates();
+  const { entityAliases, favoriteEntityIds } = useEntityOverrides();
+  const { states } = useStateSearch(searchText, "update", "", allStates, entityAliases);
 
   if (error) {
     showToast({
@@ -62,19 +71,31 @@ export function UpdatesList(): JSX.Element {
     return <List isLoading={true} searchBarPlaceholder="Loading" />;
   }
 
-  const updateRequiredStates = states.filter((s) => s.state === "on");
-  const otherStates = states.filter((s) => s.state !== "on");
+  const { favorites, others } = partitionFavoriteStates(states, favoriteEntityIds);
+  const updateRequiredStates = others.filter((s) => s.state === "on");
+  const otherStates = others.filter((s) => s.state !== "on");
 
-  const hacsState = allStates?.find((s) => s.entity_id === "sensor.hacs");
+  const hacsState = allStatesUnfiltered?.find((s) => s.entity_id === "sensor.hacs");
 
   return (
     <List searchBarPlaceholder="Filter by name or ID..." isLoading={isLoading} onSearchTextChange={setSearchText}>
-      <List.Section title="Updates available" subtitle={`${updateRequiredStates?.length}`}>
-        {updateRequiredStates?.map((state) => <StateListItem key={state.entity_id} state={state} />)}
+      {favorites.length > 0 && (
+        <List.Section title="Favorites" subtitle={`${favorites.length}`}>
+          {favorites.map((state) => (
+            <StateListItem key={state.entity_id} state={state} />
+          ))}
+        </List.Section>
+      )}
+      <List.Section title="Update Available" subtitle={`${updateRequiredStates?.length}`}>
+        {updateRequiredStates?.map((state) => (
+          <StateListItem key={state.entity_id} state={state} />
+        ))}
         <HACSUpdateItems state={hacsState} />
       </List.Section>
-      <List.Section title="No Updates required" subtitle={`${otherStates?.length}`}>
-        {otherStates?.map((state) => <StateListItem key={state.entity_id} state={state} />)}
+      <List.Section title="Up-to-Date" subtitle={`${otherStates?.length}`}>
+        {otherStates?.map((state) => (
+          <StateListItem key={state.entity_id} state={state} />
+        ))}
       </List.Section>
     </List>
   );

@@ -1,37 +1,31 @@
-import { List, Action, Icon, ActionPanel } from "@raycast/api";
+import { IssuePriorityValue, User } from "@linear/sdk";
+import { List, Action, Icon, ActionPanel, getPreferenceValues } from "@raycast/api";
 import { MutatePromise } from "@raycast/utils";
 import { format } from "date-fns";
-import { IssuePriorityValue, User } from "@linear/sdk";
 
 import { IssueResult } from "../api/getIssues";
+import { formatCycle } from "../helpers/cycles";
+import { getDateIcon } from "../helpers/dates";
+import { getEstimateLabel } from "../helpers/estimates";
+import { priorityIcons } from "../helpers/priorities";
+import { getProjectIcon } from "../helpers/projects";
 import { getStatusIcon } from "../helpers/states";
 import { getUserIcon } from "../helpers/users";
-import { priorityIcons } from "../helpers/priorities";
 
-import IssueDetail from "./IssueDetail";
 import IssueActions from "./IssueActions";
-import { formatCycle } from "../helpers/cycles";
-import { getProjectIcon } from "../helpers/projects";
-import { getEstimateLabel } from "../helpers/estimates";
-import { getDateIcon } from "../helpers/dates";
+import IssueDetail from "./IssueDetail";
+import OpenInLinear from "./OpenInLinear";
 
 type IssueListItemProps = {
   issue: IssueResult;
   mutateList?: MutatePromise<IssueResult[] | undefined>;
   mutateSubIssues?: MutatePromise<IssueResult[] | undefined>;
   priorities: IssuePriorityValue[] | undefined;
-  users: User[] | undefined;
   me: User | undefined;
 };
 
-export default function IssueListItem({
-  issue,
-  mutateList,
-  mutateSubIssues,
-  priorities,
-  me,
-  users,
-}: IssueListItemProps) {
+export default function IssueListItem({ issue, mutateList, mutateSubIssues, priorities, me }: IssueListItemProps) {
+  const { primaryAction } = getPreferenceValues<Preferences>();
   const keywords = [issue.identifier, issue.state.name, issue.priorityLabel];
 
   if (issue.assignee) {
@@ -90,6 +84,8 @@ export default function IssueListItem({
     },
   ];
 
+  const openInLinearFirst = primaryAction === "openInLinear";
+
   return (
     <List.Item
       key={issue.id}
@@ -100,10 +96,12 @@ export default function IssueListItem({
       accessories={accessories}
       actions={
         <ActionPanel title={issue.identifier}>
+          {openInLinearFirst ? <OpenInLinear title="Open Issue" url={issue.url} /> : null}
+
           <Action.Push
             title="Show Details"
             icon={Icon.Sidebar}
-            target={<IssueDetail issue={issue} mutateList={mutateList} priorities={priorities} users={users} me={me} />}
+            target={<IssueDetail issue={issue} mutateList={mutateList} priorities={priorities} me={me} />}
           />
 
           <IssueActions
@@ -111,8 +109,8 @@ export default function IssueListItem({
             mutateList={mutateList}
             mutateSubIssues={mutateSubIssues}
             priorities={priorities}
-            users={users}
             me={me}
+            hideOpenInLinear={openInLinearFirst}
           />
         </ActionPanel>
       }

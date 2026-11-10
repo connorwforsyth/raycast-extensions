@@ -49,33 +49,74 @@ Do you already have installed the Crisp plugin? This extension works by installi
 
 `;
 
+type ConversationItem = {
+  site?: {
+    domain: string;
+  };
+  conversation: {
+    session_id: string;
+    website_id: string;
+    last_message: string;
+    updated_at: number;
+    unread?: {
+      operator: number;
+      visitor: number;
+    };
+    meta: {
+      nickname: string;
+      email: string;
+      device?: {
+        geolocation?: {
+          country: string;
+        };
+      };
+      segments?: string[];
+    };
+  };
+};
+
+type ConversationsResponse =
+  | {
+      ok: boolean;
+      conversations: ConversationItem[];
+    }
+  | {
+      ok: false;
+      conversations: undefined;
+    };
+
 export function Command() {
-  const { data: sessionData, isLoading: isLoggingIn, mutate } = useSWR(["supabase"], () => getSupabaseWithSession());
   const {
     data,
     isLoading: isFetching,
     isValidating,
-  } = useSWR(sessionData?.session ? ["conversations"] : null, async () => {
+  } = useSWR(["conversations"], async (): Promise<ConversationsResponse> => {
     const { session } = await getSupabaseWithSession();
     if (!session) {
-      throw new Error("No session");
+      return {
+        ok: false as const,
+        conversations: undefined,
+      };
     }
     const client = createClient({ supabaseRef, session, url: backendUrl, fetch });
+
     const res = await client.api.v1.conversations.$get({});
+
     if (res.status === 401) {
       await LocalStorage.removeItem("session");
-      mutate();
     }
     if (!res.ok) {
       throw new Error(await res.text());
     }
 
-    return res.json();
+    const json = (await res.json()) as ConversationsResponse;
+
+    return json;
   });
 
-  const isLoading = isLoggingIn || isFetching || isValidating;
+  const isLoading = isFetching || isValidating;
 
-  if (!data?.conversations && !sessionData?.session && !isLoading) {
+  if (!isLoading && data?.conversations === undefined) {
     return <Detail markdown={initialScreen} />;
   }
   const allDomains = new Set(data?.conversations?.map((x) => x.site?.domain) || []);
@@ -90,21 +131,21 @@ export function Command() {
         const email = conversation?.meta.email || "visitor";
 
         const icon = (() => {
-          if (!conversation.unread.operator) {
+          if (!conversation.unread?.operator) {
             return { source: Icon.Dot, tintColor: Color.SecondaryText };
           }
-          if (conversation.unread.operator) {
+          if (conversation.unread?.operator) {
             return { source: Icon.Dot, tintColor: Color.Red };
           }
         })();
-        const country = conversation.meta.device.geolocation.country;
-        const segments = conversation.meta.segments.filter((x) => x !== "chat");
+        const country = conversation.meta?.device?.geolocation?.country;
+        const segments = conversation.meta?.segments?.filter((x) => x !== "chat") || [];
         const domainColor = getStringColor(site?.domain || "");
         const nickname = conversation.meta.nickname || "visitor";
         return (
           <List.Item
             key={i}
-            title={getFlagEmoji(country) + "  " + nickname}
+            title={getFlagEmoji(country ?? "") + "  " + nickname}
             subtitle={conversation?.last_message || ""}
             icon={icon}
             keywords={[
@@ -119,9 +160,10 @@ export function Command() {
                 text: timeAgo,
                 tooltip: new Date(conversation.updated_at).toLocaleString(),
               },
-              allDomains.size > 1 && {
-                tag: { value: site?.domain, color: domainColor },
-              },
+              allDomains.size > 1 &&
+                Boolean(site?.domain) && {
+                  tag: { value: site?.domain, color: domainColor },
+                },
               // {
               //   icon: { source: getFlagEmoji(country) },
               // },
@@ -142,12 +184,17 @@ export function Command() {
 }
 
 function getFlagEmoji(countryCode: string) {
-  return countryCode.toUpperCase().replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+  if (!countryCode) return "";
+  try {
+    return countryCode.toUpperCase().replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+  } catch {
+    return "";
+  }
 }
 
 const colorHash = new ColorHash({ lightness: 0.6, saturation: 0.2 });
 function getStringColor(text: string) {
-  return colorHash.hex(text);
+  return colorHash.hex(text || "");
 }
 
 // like Boolean but with typescript guard

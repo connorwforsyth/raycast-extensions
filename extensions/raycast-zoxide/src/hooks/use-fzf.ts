@@ -1,0 +1,30 @@
+import { useExec } from "@raycast/utils";
+import { makeUnfriendly, pathFor } from "@utils/path-helpers";
+
+export const useFzf = (filterText: string, options?: object) => {
+  options = {
+    parseOutput: (args: { stdout: string; stderr?: string; error?: Error }): string => {
+      if (!args.stdout.length || args.stderr?.length) return ""; // If no specified output or error, return empty string
+      return args.stdout;
+    },
+    env: {
+      PATH: pathFor("fzf"),
+    },
+    ...options,
+  };
+
+  return useExec(
+    "fzf",
+    [
+      "--exact",
+      "--no-sort",
+      "--cycle",
+      "--info=inline",
+      "--layout=reverse",
+      "--exit-0",
+      "--filter",
+      makeUnfriendly(filterText),
+    ],
+    options,
+  );
+};

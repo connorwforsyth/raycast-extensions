@@ -13,7 +13,7 @@ Because its API tries to stick as closely to [List](list.md#list)'s as possible,
 - finally, replacing all usages of `List` with `Grid`.
   {% endhint %}
 
-![](../../.gitbook/assets/grid.png)
+![](../../.gitbook/assets/grid.webp)
 
 ## Search Bar
 
@@ -117,7 +117,7 @@ Pagination requires version 1.69.0 or higher of the `@raycast/api` package.
 - `hasMore` - indicates to Raycast whether it _should_ call `onLoadMore` when the user reaches the end of the grid.
 - `pageSize` - indicates how many placeholder items Raycast should add to the end of the grid when it calls `onLoadMore`. Once `onLoadMore` finishes executing, the placeholder items will be replaced by the newly-added grid items.
 
-Note that extensions have access to a limited amount of memory. As your extension paginates, its memory usage will increase. Paginating extensively could lead to the extension eventually running out of memory and crashing. To protect against the extension crashing due to memory exhaustion, Raycast monitors the extension's memory usage and employs heuristics to determine whether it's safe to paginate further. If it's deemed unsafe to continue paginating, `onLoadMore` will not be triggered when the user scrolls to the bottom, regardless of the `hasMore` value. Additionally, during development, a warning will be printed in the terminal.
+Note that extensions have access to a limited amount of memory. As your extension paginates, its memory usage will increase. Paginating extensively could lead to the extension eventually running out of memory and crashing. To protect against the extension crashing due to memory exhaustion, Raycast monitors the extension's memory usage and employs heuristics to determine whether it's safe to paginate further. The heuristic uses initial result growth until a page completes, then estimates the memory needed for another page using recent page loads in the current view. It reserves additional headroom when that estimate is small or unavailable. If it's deemed unsafe to continue paginating, `onLoadMore` will not be triggered even when `hasMore` is `true`. Raycast periodically rechecks blocked pagination and expires old page estimates, allowing pagination to resume when sufficient memory is available. The initial estimate remains until a page completes or the dataset changes. These checks reduce the risk of running out of memory but cannot guarantee that a page will fit. During development, a warning is printed in the terminal.
 
 For convenience, most of the [hooks](../../utils-reference/getting-started.md) that we provide have built-in pagination support. Here's an example of how to add pagination support to a simple command using [usePromise](../../utils-reference/react-hooks/usePromise.md), and one "from scratch".
 
@@ -250,6 +250,10 @@ export default function Command() {
 {% endtab %}
 
 {% endtabs %}
+
+{% hint style="warning" %}
+Pagination might not work properly if all grid items are rendered and visible at once, as `onLoadMore` won't be triggered. This typically happens when an API returns 10 results by default, all fitting within the Raycast window. To fix this, try displaying more items, like 20.
+{% endhint %}
 
 ## Examples
 
@@ -512,7 +516,7 @@ empty view alongside the other `Grid.Item`s.
 
 Note that the `EmptyView` is _never_ displayed if the `Grid`'s `isLoading` property is true and the search bar is empty.
 
-![Grid EmptyView illustration](../../.gitbook/assets/grid-empty-view.png)
+![Grid EmptyView illustration](../../.gitbook/assets/grid-empty-view.webp)
 
 #### Example
 
@@ -582,7 +586,7 @@ Sections can specify their own `columns`, `fit`, `aspectRatio` and `inset` props
 
 #### Example
 
-![](../../.gitbook/assets/grid-styled-sections.png)
+![](../../.gitbook/assets/grid-styled-sections.webp)
 
 {% tabs %}
 {% tab title="GridWithSection.tsx" %}
@@ -645,7 +649,7 @@ export default function Command() {
 
 An interface describing an accessory view in a `Grid.Item`.
 
-![Grid.Item accessories illustration](../../.gitbook/assets/grid-item-accessories.png)
+![Grid.Item accessories illustration](../../.gitbook/assets/grid-item-accessories.webp)
 
 ### Grid.Inset
 

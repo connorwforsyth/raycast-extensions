@@ -1,7 +1,18 @@
+import { Clipboard } from "@raycast/api";
 import fetch from "node-fetch";
 import path from "path";
-import { runAppleScript } from "run-applescript";
 import { FileOptions, temporaryWrite } from "tempy";
+
+// Windows rejects these characters, and trailing dots or spaces, in file names
+function sanitizeFilename(name: string): string {
+  const ext = path.extname(name);
+  const base = name
+    .slice(0, name.length - ext.length)
+    .replace(/[<>:"/\\|?*]/g, "")
+    .replace(/[. ]+$/, "")
+    .trim();
+  return `${base || "meme"}${ext}`;
+}
 
 export default async function copyFileToClipboard(url: string, name?: string) {
   const response = await fetch(url);
@@ -16,7 +27,7 @@ export default async function copyFileToClipboard(url: string, name?: string) {
 
   let tempyOpt: FileOptions;
   if (name) {
-    tempyOpt = { name };
+    tempyOpt = { name: sanitizeFilename(name) };
   } else {
     tempyOpt = { extension: ".jpg" };
   }
@@ -30,7 +41,7 @@ export default async function copyFileToClipboard(url: string, name?: string) {
   }
 
   try {
-    await runAppleScript(`tell app "Finder" to set the clipboard to ( POSIX file "${file}" )`);
+    await Clipboard.copy({ file });
   } catch (e) {
     const error = e as Error;
     throw new Error(`Failed to copy Meme: "${error.message}"`);

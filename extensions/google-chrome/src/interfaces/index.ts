@@ -5,6 +5,7 @@ import { getFavicon } from "@raycast/utils";
 export interface Preferences {
   readonly useOriginalFavicon: boolean;
   readonly openTabInProfile: SettingsProfileOpenBehaviour;
+  readonly profilePath: string;
 }
 
 export enum SettingsProfileOpenBehaviour {
@@ -38,7 +39,7 @@ export class Tab {
     public readonly favicon: string,
     public readonly windowsId: number,
     public readonly tabIndex: number,
-    public readonly sourceLine: string
+    public readonly sourceLine: string,
   ) {}
 
   static parse(line: string): Tab {
@@ -52,11 +53,30 @@ export class Tab {
   }
 
   urlWithoutScheme(): string {
-    return this.url.replace(/(^\w+:|^)\/\//, "").replace("www.", "");
+    try {
+      return this.url.replace(/(^\w+:|^)\/\//, "").replace("www.", "");
+    } catch {
+      // Fallback for any unexpected errors
+      return this.url;
+    }
+  }
+
+  realFavicon(): string {
+    try {
+      return new URL(this.favicon || "/favicon.ico", this.url).href;
+    } catch {
+      // Fallback for invalid URLs (e.g., javascript:, data:, etc.)
+      return this.favicon || "";
+    }
   }
 
   googleFavicon(): Image.ImageLike {
-    return getFavicon(this.url);
+    try {
+      return getFavicon(this.url);
+    } catch {
+      // Fallback for invalid URLs
+      return { source: "" };
+    }
   }
 }
 
@@ -92,4 +112,20 @@ export interface ExecError extends Error {
 export interface ChromeProfile {
   readonly name: string;
   readonly id: string;
+}
+
+export class ChromeWindow {
+  static readonly WINDOW_FIELD_SEPARATOR: string = "\x1F";
+  static readonly WINDOW_RECORD_SEPARATOR: string = "\x1E";
+
+  constructor(
+    public readonly id: number,
+    public readonly title: string,
+    public readonly activeTabUrl: string,
+  ) {}
+
+  static parse(line: string): ChromeWindow {
+    const parts = line.split(this.WINDOW_FIELD_SEPARATOR);
+    return new ChromeWindow(+parts[0], parts[1], parts[2] || "");
+  }
 }

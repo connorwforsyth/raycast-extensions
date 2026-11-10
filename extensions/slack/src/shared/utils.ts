@@ -2,6 +2,13 @@ import { open } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 import { CodedError, ErrorCode } from "@slack/web-api";
 import { formatDistance } from "date-fns";
+import { slack } from "./client/WebClient";
+import { formatRetryAfter, getRetryAfter, isRateLimitError, slackRateLimitDocumentationUrl } from "./client/rateLimit";
+import * as emoji from "node-emoji";
+
+function convertSlackEmojiToUnicode(text: string): string {
+  return emoji.emojify(text);
+}
 
 const timeDifference = (date: Date): string => {
   const now = new Date();
@@ -12,6 +19,12 @@ const timeDifference = (date: Date): string => {
   const distance = formatDistance(nowMs, dateMs, { includeSeconds: true });
 
   return dateMs <= nowMs ? `${distance} ago` : `in ${distance}`;
+};
+
+const convertTimestampToDate = (ts: string) => {
+  const [seconds, microseconds] = ts.split(".").map(Number);
+  const milliseconds = seconds * 1000 + Math.floor(microseconds / 1000);
+  return new Date(milliseconds);
 };
 
 const buildScriptEnsuringSlackIsRunning = (commandsToRunAfterSlackIsRunning: string): string => {
@@ -45,24 +58,43 @@ const isCodedError = (error: unknown): error is CodedError => {
 };
 
 const handleError = async (error: CodedError | Error | unknown, title?: string) => {
-  if (isCodedError(error)) {
-    if (error.code === ErrorCode.RateLimitedError) {
-      return showFailureToast(error, {
-        title: "You've been rate-limited.",
-        message: "Please try again in a few seconds/minutes.",
-      });
-    }
+  const retryAfter = getRetryAfter(error);
+  const rateLimited = (isCodedError(error) && error.code === ErrorCode.RateLimitedError) || isRateLimitError(error);
 
+  if (rateLimited) {
+    return showFailureToast(error, {
+      title: "Slack rate limit exceeded",
+      message: retryAfter
+        ? `Slack asked us to wait ${formatRetryAfter(retryAfter)}. Please try again after that.`
+        : "Slack is temporarily limiting requests. Please wait and try again.",
+      primaryAction: {
+        title: "View Slack Rate Limits",
+        onAction: () => open(slackRateLimitDocumentationUrl),
+      },
+    });
+  }
+
+  if (isCodedError(error)) {
     if (error.message.includes("missing_scope")) {
+      const isUsingOAuth = !!(await slack.client.getTokens());
+
       return showFailureToast(error, {
         title: "Missing Scopes",
         message: "Please make sure your Slack app has all of the required scopes.",
-        primaryAction: {
-          title: "Open Slack Apps",
-          onAction: () => {
-            open("https://api.slack.com/apps");
-          },
-        },
+        primaryAction: isUsingOAuth
+          ? {
+              title: "Re-authorize Slack",
+              onAction: async () => {
+                await slack.client.removeTokens();
+                await slack.authorize();
+              },
+            }
+          : {
+              title: "Open Slack Apps",
+              onAction: () => {
+                open("https://api.slack.com/apps");
+              },
+            },
       });
     }
   }
@@ -70,4 +102,86 @@ const handleError = async (error: CodedError | Error | unknown, title?: string) 
   return showFailureToast(error, { title: title ?? "Something unexpected happened" });
 };
 
-export { timeDifference, buildScriptEnsuringSlackIsRunning, handleError };
+const isValidChannelId = (channelId?: string) => {
+  if (channelId == null) return false;
+
+  const channelIdRegex = /^C[A-Z0-9]{8,}$/;
+
+  return channelIdRegex.test(channelId.trim());
+};
+
+type SlackFileLike = {
+  id?: string;
+  name?: string;
+  title?: string;
+  mimetype?: string;
+  filetype?: string;
+  size?: number;
+};
+
+type FormattedSlackFile = {
+  id: string;
+  name?: string;
+  mimetype?: string;
+  size?: number;
+};
+
+/**
+ * Normalizes a message's `files` array into a compact shape the AI can act on.
+ * The `id` values can be passed to the Download Files tool. Returns `undefined`
+ * when a message has no downloadable files so the key can be omitted.
+ */
+const formatSlackFiles = (files?: SlackFileLike[]): FormattedSlackFile[] | undefined => {
+  const formatted = (files ?? [])
+    .filter((file): file is SlackFileLike & { id: string } => Boolean(file.id))
+    .map((file) => ({
+      id: file.id,
+      name: file.name ?? file.title,
+      mimetype: file.mimetype ?? file.filetype,
+      size: file.size,
+    }));
+
+  return formatted.length > 0 ? formatted : undefined;
+};
+
+export {
+  timeDifference,
+  convertTimestampToDate,
+  buildScriptEnsuringSlackIsRunning,
+  handleError,
+  convertSlackEmojiToUnicode,
+  isValidChannelId,
+  formatSlackFiles,
+};
+
+type MessageWithContent = {
+  text?: string;
+  attachments?: { pretext?: string; title?: string; text?: string; fallback?: string }[];
+  blocks?: { text?: { text?: string } }[];
+};
+
+/**
+ * Extracts the text content of a message. Bot/webhook messages (e.g. IFTTT tweet streams)
+ * often have an empty top-level `text` with the actual content living in `attachments` or `blocks`.
+ */
+export function getMessageText(message: MessageWithContent) {
+  if (message.text) {
+    return message.text;
+  }
+
+  const attachmentText = message.attachments
+    ?.map(
+      (attachment) =>
+        [attachment.pretext, attachment.title, attachment.text].filter(Boolean).join("\n") || attachment.fallback,
+    )
+    .filter(Boolean)
+    .join("\n\n");
+  if (attachmentText) {
+    return attachmentText;
+  }
+
+  return message.blocks
+    ?.map((block) => block.text?.text)
+    .filter(Boolean)
+    .join("\n");
+}

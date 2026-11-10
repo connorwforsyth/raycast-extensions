@@ -6,25 +6,38 @@ Query the [dust.tt](https://dust.tt/) service extention for [Raycast](https://ww
 
 You need a dust.tt account to use this extension.
 
-### API key
+## Connection
 
-You can create an API key for Dust by going to your Admin preferences, on the **Developers Tools** panel
+### Using your Dust account
 
-### Workspace ID
-
-The ID can be found in any of the workspace's pages
+Raycast will automatically show a popup to sign in with Dust.
 
 ## Commands
 
-### Ask Dust / GPT-4
+### Ask Dust
 
-Directly ask something to the Dust or GPT-4 agent.
+Directly ask something to the Dust assistant.
 
-If you ask a question with the parameter, you will get a form to add one, auto-filled with the currently selected text. 
+If you ask a question with the parameter, you will get a form to add one, auto-filled with the currently selected text.
 
-### Ask agent
+### Ask ...
 
-Select a specific dust agent to query
+Select a specific dust assistant to query
+
+### Replace Selection with Agent
+
+Silently sends the currently selected text (in any app) to a specific
+custom agent and replaces the selection with the answer — no window, just
+background notifications. Great for grammar fixes, translations, or
+rewrites. Configure it via "Set up Replace Selection" below (you can't
+launch it directly — it needs a Quicklink to know which assistant to use).
+
+### Set up Replace Selection
+
+Pick any Dust assistant, then "Create Quicklink…" to save a dedicated,
+freely-renamable shortcut that silently replaces your selected text with
+that assistant's answer. Create as many as you want, one per assistant,
+and assign each its own hotkey from Raycast Preferences → Quicklinks.
 
 ![dust-tt-1](https://github.com/alan-eu/rayast-dust/assets/467126/2c7b0b36-850b-4dde-a875-be81be78a2a2)
 
@@ -39,9 +52,3 @@ Select a specific dust agent to query
 Access command history
 
 ![dust-tt-6](https://github.com/alan-eu/rayast-dust/assets/467126/731d181d-7c97-4aed-a81c-8e9163a1038e)
-
-## API code
-
-Code extracted from:
-* Dust slack connector: https://github.com/dust-tt/dust/tree/main/connectors/src/connectors/slack
-* Dust types: https://github.com/dust-tt/dust/tree/main/types

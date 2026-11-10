@@ -1,57 +1,84 @@
-import { View } from "./components/View";
 import {
   Action,
   ActionPanel,
-  Icon,
+  LaunchProps,
   LaunchType,
   List,
   Toast,
+  getPreferenceValues,
   launchCommand,
   popToRoot,
   showHUD,
   showToast,
 } from "@raycast/api";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View } from "./components/View";
+import { PlaylistPicker } from "./components/PlaylistPicker";
 import { useCurrentlyPlaying } from "./hooks/useCurrentlyPlaying";
-import { useMe } from "./hooks/useMe";
-import { ListOrGridSection } from "./components/ListOrGridSection";
-import PlaylistItem from "./components/PlaylistItem";
 import { addToPlaylist } from "./api/addToPlaylist";
-import { useMyPlaylists } from "./hooks/useMyPlaylists";
-import { getError } from "./helpers/getError";
+import { playlistContainsTrack } from "./api/playlistContainsTrack";
 
-function AddToPlaylistCommand() {
-  const { currentlyPlayingData, currentlyPlayingIsLoading, currentlyPlayingRevalidate } = useCurrentlyPlaying();
-  const [searchText, setSearchText] = useState("");
+type LaunchContextData = { playlistId?: string };
 
-  const { myPlaylistsData } = useMyPlaylists();
-  const { meData } = useMe();
+function AddToPlaylistCommand({ playlistId }: LaunchContextData) {
+  const { currentlyPlayingData, currentlyPlayingIsLoading } = useCurrentlyPlaying();
+  const started = useRef(false);
+  const busy = useRef(false);
+  const completed = useRef(false);
+  const [canRetry, setCanRetry] = useState(false);
+  const uri = currentlyPlayingData?.item?.uri;
+  const { duplicateSongCheck } = getPreferenceValues<Preferences.AddPlayingSongToPlaylist>();
 
-  if (!currentlyPlayingData || !currentlyPlayingData.item) {
+  const add = useCallback(
+    async function add(allowDuplicate = false) {
+      if (!playlistId || !uri || currentlyPlayingIsLoading || busy.current || completed.current) return;
+      busy.current = true;
+      setCanRetry(false);
+      try {
+        if (!allowDuplicate && duplicateSongCheck && (await playlistContainsTrack(playlistId, uri))) {
+          await showToast({
+            title: "Duplicate found",
+            style: Toast.Style.Failure,
+            primaryAction: { title: "Add to playlist anyways", onAction: () => add(true) },
+          });
+          return;
+        }
+        await addToPlaylist({ playlistId, trackUris: [uri] });
+        completed.current = true;
+        await showHUD("Added to playlist");
+        await popToRoot();
+      } catch (error) {
+        // Only an explicit retry starts another attempt; a render must not repeat a failed mutation.
+        setCanRetry(!completed.current);
+        await showToast({ title: "Error adding song to playlist", message: String(error), style: Toast.Style.Failure });
+      } finally {
+        busy.current = false;
+      }
+    },
+    [playlistId, uri, currentlyPlayingIsLoading, duplicateSongCheck],
+  );
+
+  useEffect(() => {
+    if (!playlistId || !uri || currentlyPlayingIsLoading || started.current) return;
+    started.current = true;
+    void add();
+  }, [playlistId, uri, currentlyPlayingIsLoading, add]);
+
+  if (!uri || playlistId) {
     return (
       <List isLoading={currentlyPlayingIsLoading}>
         <List.EmptyView
-          icon={Icon.Music}
-          title="Nothing is playing right now"
+          title={playlistId && uri ? "Add to playlist" : "Nothing is playing right now"}
           actions={
             <ActionPanel>
+              {canRetry && <Action title="Retry Adding to Playlist" onAction={() => add()} />}
               <Action
-                icon={Icon.Book}
                 title="Your Library"
                 onAction={() => launchCommand({ name: "yourLibrary", type: LaunchType.UserInitiated })}
               />
               <Action
                 title="Search"
-                icon={Icon.MagnifyingGlass}
                 onAction={() => launchCommand({ name: "search", type: LaunchType.UserInitiated })}
-              />
-              <Action
-                icon={Icon.Repeat}
-                title="Refresh"
-                onAction={async () => {
-                  currentlyPlayingRevalidate();
-                }}
-                shortcut={{ modifiers: ["cmd"], key: "r" }}
               />
             </ActionPanel>
           }
@@ -59,66 +86,13 @@ function AddToPlaylistCommand() {
       </List>
     );
   }
-  return (
-    <List
-      searchBarPlaceholder="Search for Playlist"
-      searchText={searchText}
-      onSearchTextChange={setSearchText}
-      filtering={true}
-    >
-      <ListOrGridSection type={"list"} title="Playlists">
-        {myPlaylistsData?.items
-          ?.filter((playlist) => playlist.owner?.id === meData?.id)
-          .map((playlist) => (
-            <PlaylistItem
-              type={"list"}
-              key={playlist.id}
-              playlist={playlist}
-              actions={
-                <ActionPanel>
-                  <Action
-                    key={playlist.id}
-                    icon={Icon.Plus}
-                    title="Add Current Song to Playlist"
-                    onAction={async () => {
-                      if (playlist.id === undefined) {
-                        showToast({
-                          title: "Error adding song to playlist",
-                          message: "Playlist ID undefined",
-                          style: Toast.Style.Failure,
-                        });
-                        return;
-                      }
-                      try {
-                        await addToPlaylist({
-                          playlistId: playlist.id,
-                          trackUris: [currentlyPlayingData.item?.uri as string],
-                        });
-                        await showHUD(`Added to ${playlist.name}`);
-                        await popToRoot();
-                      } catch (err) {
-                        const error = getError(err);
-                        await showToast({
-                          title: "Error adding song to playlist",
-                          message: error.message,
-                          style: Toast.Style.Failure,
-                        });
-                      }
-                    }}
-                  />
-                </ActionPanel>
-              }
-            />
-          ))}
-      </ListOrGridSection>
-    </List>
-  );
+  return <PlaylistPicker uri={uri} quicklinks />;
 }
 
-export default function Command() {
+export default function Command(props: LaunchProps<{ launchContext: LaunchContextData }>) {
   return (
     <View>
-      <AddToPlaylistCommand />
+      <AddToPlaylistCommand playlistId={props.launchContext?.playlistId} />
     </View>
   );
 }

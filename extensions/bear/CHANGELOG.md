@@ -1,5 +1,19 @@
 # Bear Changelog
 
+## [Fix non-Latin search] - 2026-10-12
+
+- Search is now case-insensitive for non-Latin text such as Cyrillic: [#32214](https://github.com/raycast/extensions/issues/32214)
+
+## [✨ AI Enhancements] - 2025-02-21
+
+- Add AI Tool to "Create Note"
+- Add AI Tool to "Search Notes"
+- chore: update deps
+
+## [Fixes] - 2024-07-03
+
+- Tags don't appear in dropdown if all associated notes are either trashed or archived: [#13297](https://github.com/raycast/extensions/issues/13297)
+
 ## [Connect note pinning form value to API call] - 2024-06-08
 - When creating a new note, checking the option to "pin to top" is now taken into account within the API call
 - When hovering over the preference for "Pin note in notes list", the description is now accurate to the purpose

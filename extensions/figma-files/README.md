@@ -10,11 +10,11 @@ Figma file search helps you quickly open a Figma file from anywhere on your mac.
 4. Support for opening a specific page of a file
 5. Menu Bar command for quick access to files
 
-Note - Currently, this extension only works with team accounts. Draft files are not supported due to a Figma API limitation.
+Note - Currently, this extension only works with team accounts. Draft files are not supported due to a Figma API limitation. Figma slides are not supported for the same reason, so you won't see them in Raycast.
 
 ## Setting up the Extension
 
-1. Locate your team IDs. Do this by visiting Figma.com and click the team name you wish to use. In the URL, copy the ID that comes BETWEEN the word `/team/` and BEFORE your actual team name. You can also right-click on the team name in the Figma Desktop app sidebar and copy the link.
+1. Locate your team ID/s. Do this by visiting Figma.com and click the team name you wish to use. In the URL, copy the ID that comes BETWEEN the word `/team/` and BEFORE your actual team name, or `/all-projects`. You can also right-click on the team name in the Figma Desktop app sidebar and copy the link.
 
 > Example - https://www.figma.com/files/team/12345678987654321/NameOfTeam...
 
@@ -25,3 +25,5 @@ The extension supports multiple teams. If you have more than one team, separate 
 2. Paste your team IDs into the Raycast preferences field for this extension, it will be the first screen you'll see when you launch any command.
 
 3. On the second screen, Raycast will ask you to sign in with Figma. Clicking on the button will redirect you to your web browser, where you can sign in and give access to your Figma files to Raycast.
+
+4. Optional: to include files in nested folders, add a personal access token with the `folders:read`, `file_content:read` and `file_metadata:read` scopes in the extension preferences. Create it in Figma under Settings > Security > Personal access tokens. Without a token, only top-level folders are listed.

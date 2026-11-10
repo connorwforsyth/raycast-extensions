@@ -1,47 +1,25 @@
-import { Clipboard, closeMainWindow, launchCommand, LaunchType, showHUD } from "@raycast/api";
-import { callbackLaunchCommand } from "raycast-cross-extension";
-import { addToHistory } from "./history";
-import { Color, PickColorCommandLaunchProps } from "./types";
-import { getFormattedColor } from "./utils";
-import { pickColor } from "swift:../swift/color-picker";
+import { closeMainWindow, launchCommand, LaunchType, getPreferenceValues, showHUD } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
+import { pickAndHandleColor } from "./lib/pick-color";
+import { PickColorCommandLaunchProps } from "./lib/types";
+import { isMac } from "./lib/utils";
 
-export default async function command(props: PickColorCommandLaunchProps) {
-  await closeMainWindow();
+export default async function Command(props: PickColorCommandLaunchProps) {
+  const { showColorName, closeRaycast } = getPreferenceValues<Preferences.PickColor>();
+  if (closeRaycast) {
+    await closeMainWindow();
+  }
 
   try {
-    const pickedColor = (await pickColor()) as Color | undefined;
-    if (!pickedColor) {
-      return;
-    }
+    const outcome = await pickAndHandleColor({ launchContext: props.launchContext, showColorName });
+    if (outcome === "cancelled") return;
 
-    addToHistory(pickedColor);
-
-    const hex = getFormattedColor(pickedColor);
-    if (!hex) {
-      throw new Error("Failed to format color");
-    }
-
-    if (props.launchContext?.callbackLaunchOptions) {
-      if (props.launchContext?.copyToClipboard) {
-        await Clipboard.copy(hex);
-      }
-
+    if (isMac) {
       try {
-        await callbackLaunchCommand(props.launchContext.callbackLaunchOptions, { hex });
+        await launchCommand({ name: "menu-bar", type: LaunchType.Background });
       } catch (e) {
-        await showFailureToast(e);
-      }
-    } else {
-      await Clipboard.copy(hex);
-      await showHUD(`Copied color ${hex} to clipboard`);
-    }
-
-    try {
-      await launchCommand({ name: "menu-bar", type: LaunchType.Background });
-    } catch (e) {
-      if (!(e instanceof Error && e.message.includes("must be activated"))) {
-        await showFailureToast(e);
+        // Refreshing the optional menu bar must not turn a successful pick into an error.
+        console.warn("Could not refresh Menu Bar Color Picker", e);
       }
     }
 

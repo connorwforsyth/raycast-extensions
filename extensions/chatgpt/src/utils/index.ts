@@ -2,7 +2,8 @@ import { Chat, Message } from "../type";
 import path from "node:path";
 import * as fs from "node:fs";
 import OpenAI from "openai/index";
-import ChatCompletionContentPart = OpenAI.ChatCompletionContentPart;
+
+type ChatCompletionContentPart = OpenAI.ChatCompletionContentPart;
 
 function countOpenAITokens(text: string): number {
   // 100 tokens ~= 75 words
@@ -16,24 +17,31 @@ function limitConversationLength(chats: Chat[]) {
   const newChats: Chat[] = [];
   let tokens = 0;
 
-  for (const chat of chats) {
+  // Walk from the newest chat back so the most recent turns are kept when the budget runs out.
+  // The newest turn is always kept, even if it alone exceeds the budget, so a follow-up never loses all context.
+  for (let i = chats.length - 1; i >= 0; i--) {
+    const chat = chats[i];
     const questionTokens = countOpenAITokens(chat.question);
     const answerTokens = countOpenAITokens(chat.answer);
 
     tokens = tokens + questionTokens + answerTokens;
 
-    if (tokens > maxTokens) {
+    if (tokens > maxTokens && newChats.length > 0) {
       break;
     }
 
-    newChats.push(chat);
+    newChats.unshift(chat);
   }
 
   return newChats;
 }
 
 export function chatTransformer(chat: Chat[], prompt: string): Message[] {
-  const messages: Message[] = [{ role: "system", content: prompt }];
+  const messages: Message[] = [];
+  if (prompt !== "") {
+    // only add system prompt if it's not empty
+    messages.push({ role: "system", content: prompt });
+  }
   const limitedChat = limitConversationLength(chat);
   limitedChat.forEach(({ question, answer }) => {
     messages.push({ role: "user", content: question });
@@ -79,7 +87,13 @@ export const imgFormat = (file: string) => {
   return `data:${type};base64,${fs.readFileSync(replace).toString("base64")}`;
 };
 
-export const buildUserMessage = (question: string, files: string[]) => {
+export const buildUserMessage = (question: string, files?: string[]) => {
+  if (!files || files.length === 0) {
+    // If there is no file, return the question string directly
+    return question;
+  }
+
+  // If there are files, create an array
   const content: ChatCompletionContentPart[] = [
     {
       type: "text",
@@ -96,6 +110,7 @@ export const buildUserMessage = (question: string, files: string[]) => {
       },
     });
   });
+
   return content;
 };
 

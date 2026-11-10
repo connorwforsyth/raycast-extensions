@@ -8,7 +8,7 @@ let package = Package(
     .macOS(.v12)
   ],
   dependencies: [
-    .package(url: "https://github.com/raycast/extensions-swift-tools", from: "1.0.0")
+    .package(url: "https://github.com/raycast/extensions-swift-tools", from: "1.0.5")
   ],
   targets: [
     .executableTarget(
@@ -18,6 +18,7 @@ let package = Package(
         .product(name: "RaycastSwiftPlugin", package: "extensions-swift-tools"),
         .product(name: "RaycastTypeScriptPlugin", package: "extensions-swift-tools"),
       ]
-    )
+    ),
+    .testTarget(name: "AppleRemindersTests", dependencies: ["AppleReminders"])
   ]
 )

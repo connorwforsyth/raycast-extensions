@@ -1,5 +1,115 @@
 # Color Picker Changelog
 
+## [Close Raycast Preference and Windows Shortcuts] - 2026-11-06
+
+- Add `Close Raycast before picking color` preference
+- Add Windows keyboard shortcuts
+- Bump all dependencies to the latest
+
+## [Color Groups] - 2026-10-08
+
+- Sort saved colors into named groups from Organize Colors, each shown as its own section
+- Nest groups with a slash, for example `Work/Calendar`
+- Rename or delete a group, move several colors at once in Multi-Select Mode, and copy a whole group as a list, JSON, CSS classes or CSS variables
+- Grouped colors are kept when history fills up, like favorites
+- Show each favorite's group in Favorite Colors, and let Raycast AI filter saved colors by group
+
+## [Enable Ask AI Raycast Command] - 2026-09-27
+
+- Register the seven existing color tools with Raycast AI
+- Enable the Ask Color Picker entry in Raycast search
+
+## [Fix Color Picking and Conversion] - 2026-09-25
+
+- Stop showing an error after picking a color when the optional menu bar command is disabled or unavailable
+- Allow typing or pasting colors directly into Convert Color, with inline feedback for invalid input
+- Fix showing color names after picking when using formats such as P3, OKLCH, or HEX No Prefix
+
+## [Fix] - 2026-09-10
+
+- Fix color swatches rendering as a grey square when the color format preference is set to a format that is not a valid CSS color, such as `HEX No Prefix`
+- Fix the `OKLCH` format dropping the alpha channel and producing a `NaN` hue for black, white and gray
+
+## [Favorite Colors & AI Tools] - 2026-08-29
+
+- Add a `Favorite Colors` command to view and use saved favorites
+- Add AI tools to convert, name, save, list, contrast-check, generate scales, and format palettes
+
+## [Fix] - 2026-06-20
+
+- Fix the `Color Wheel` command showing an oversized, clipped wheel by replacing the preview asset and rendering it at a smaller height
+
+## [Favorites] - 2026-05-18
+
+- Add favorites to the `Organize Colors` command
+- Add actions to reorder favorite colors
+
+## [Multi-Color Selection] - 2026-04-27
+
+- Add a Single/Multi select mode toggle to the search bar of `Organize Colors` and `Generate Colors`
+- In multi-select mode, switch to a list view with a checkmark prefix on selected colors
+- Copy selected colors as JSON, CSS Classes, or CSS Variables from the action panel
+- Selection persists when switching between modes
+
+## [Windows: Enhancement] - 2026-02-13
+
+- Add ability to cancel color picker with Esc key
+- Fix typos
+
+## [Windows Support] - 2026-02-12
+
+- Added Eyedropper and color extractor for Windows using Rust
+- Updated Dependencies
+- Organized folder structure
+
+## [Bugfix & Maintenance] - 2025-08-13
+
+- Fix the incorrect subtitle content in the `Convert Color` command
+- Bump all dependencies to the latest
+
+## [Bugfix] - 2025-06-05
+
+- Add a new callback return value `formattedColor` to return the color in the user's preferred format
+- Fix an issue where the callback hex color was not being returned correctly
+- Bump all dependencies to the latest
+
+## [Enhancement] - 2025-03-10
+
+- Add the color format dropdown option to the `Convert Color` command.
+
+## [Extract Color] - 2025-02-25
+
+- Select image from finder
+- Run `Extract Color` command from Raycast
+- Get color palette from the image
+
+## [Accessibility] - 2025-02-13
+
+- Add support for showing color name after picking color
+
+## [Enhancement] - 2024-11-25
+
+- Update README with FAQs
+
+## [Enhancement] - 2024-10-04
+
+- Add Color Names command
+- Bump all dependencies to the latest
+
+## [Enhancement] - 2024-09-02
+
+- Improved the `Organize Colors` command to dynamically fetch the frontmost application and display its icon in the paste action.
+
+## [Cross-Extension] - 2024-07-09
+
+- Bump dependencies
+- Expose Color Wheel ability through [Raycast Cross-Extension Conventions](https://github.com/LitoMore/raycast-cross-extension-conventions)
+- Update API documentation
+
+## [Enhancement] - 2024-06-30
+
+- Add "Color Wheel" command
+
 ## [Enhancement] - 2024-06-07
 
 - Fix bug with OKLCH/LCH conversion
@@ -12,12 +122,12 @@
 
 - Add support for rgb, rgb %, oklch, lch and p3 color formats
 - Add "Convert Color" command
-- Update "Generate Colors" command to respect the preferred color format
+- Update `Generate Colors` command to respect the preferred color format
 
 ## [Generate Colors using AI] - 2024-05-23
 
-- Add a new "Generate Colors" command
-- Group "Copy As..." actions into a single submenu
+- Add a new `Generate Colors` command
+- Group `Copy As...` actions into a single submenu
 - Remember the user's choice when deleting a color from the history
 
 ## [Cross-Extension] - 2024-05-15

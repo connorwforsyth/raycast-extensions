@@ -1,54 +1,75 @@
-# KeepassXC Extension for Raycast
+<div align="center">
+  <img width="125" src="https://raw.githubusercontent.com/raycast/extensions/main/extensions/keepassxc/assets/keepassxc.png">
 
-This is a Raycast extension to access keepass database.
+<h1>KeePassXC</h1>
+
+Access your KeePass database directly from Raycast
+
+Fuzzy search entries &nbsp;⸱&nbsp; Copy & paste any field &nbsp;⸱&nbsp; Generate TOTP codes &nbsp;⸱&nbsp; Mark entries as favorites
+
+</div>
 
 ## Requirements
 
-- [KeePassXC.app](https://keepassxc.org) installed.(`keepassxc-cli` in `KeepassXC.app` is required to access keepass database
+To use this extension, you will need:
 
-## Setup
+- [KeePassXC](https://keepassxc.org)
 
-There are 3 parameters required for this extension to work:
+## Search
 
-- path of `KeePassXC.app` (default `/Applications/KeePassXC.app`)
-- a keepass database file
-- password to access database
+### Text
 
-![preference](media/preferences.png)
+Type anything in the search bar to search entry titles, usernames and folder names (URLs too):
 
-## Usage
+- **Abbreviations:** `gh` finds GitHub, `cld` finds Claude
+- **Typos:** `guthub` finds GitHub
+- **Several words:** each word must match the entry, in any field and in any order (e.g. `cld admin` finds the Claude entry with the username admin)
 
-![example](media/example.gif)
+### Folder
 
-### Shortcuts
+Pick a folder from the dropdown next to the search bar to only show its entries.
 
-- `Enter` : Paste Password
-- `Shift`+`Enter` : Paste Username
-- `Option`+`Enter` : Paste TOTP
-- `Cmd`+`G` : Copy Password
-- `Cmd`+`B` : Copy Username
-- `Cmd`+`T` : Copy TOTP
-- `Shift` + `Cmd` + `U` : Open URL in Browser
+### Field Filters
 
-## Password Security Note
+To filter on a specific field, use the [KeePassXC search syntax](https://keepassxc.org/docs/KeePassXC_UserGuide#_searching) anywhere in the search bar. A filter is a field followed by a value:
 
-This extension works by using `keepassxc-cli`(inside `KeePassXC.app`) in command line to access keepass database:
+| Field    | Short | Searches    |
+| -------- | ----- | ----------- |
+| `user:`  | `u:`  | Username    |
+| `title:` | `t:`  | Title       |
+| `url:`   |       | URL         |
+| `group:` | `g:`  | Folder path |
 
-- Main password is stored by raycast. (encrypted)
-- Main password will be send to `keepassxc-cli` by simulating command line interaction with nodejs api [subprocess.stdin.write](https://nodejs.org/api/child_process.html#subprocessstdin).
+Unlike text search, filters are strict: by default, the field must contain the value (case-insensitive). Change this with:
 
-### Related commands
+- **Modifiers** before the field: `-` or `!` to exclude, `+` for an exact match, `*` for a regular expression
+- **Wildcards** in the value: `*` for anything, `?` for one character, `|` for OR
+- **Quotes** for values with spaces
 
-```bash
-# List entries for version < 2.7
-keepassxc-cli locate -q /path/to/database.kdbx /
-# List entries for version >= 2.7
-keepassxc-cli find -q /path/to/database.kdbx /
+Filters and text can be combined: an entry must match all of them.
 
-# Get password by entry
-keepassxc-cli show -q -a Password /path/to/database.kdbx entry_name
+| Query                  | Description                                                |
+| ---------------------- | ---------------------------------------------------------- |
+| `github u:alice`       | Entries matching "github" whose username contains alice    |
+| `user:john\|smith`     | Entries whose username contains john OR smith              |
+| `u:adm?n`              | Entries whose username contains adm, any character, then n |
+| `+u:johnsmith -t:test` | Username exactly johnsmith, title not containing test      |
+| `g:"Shared Drive"`     | Entries in a folder whose path contains Shared Drive       |
+| `-url:google.com`      | Entries whose URL doesn't contain google.com               |
 
-# Get username by entry
-keepassxc-cli show -q -a Username /path/to/database.kdbx entry_name
+## Available Options
 
-```
+Configure the following preferences in the extension settings:
+
+- **Inactivity Timer:** Automatically locks the database after a period of inactivity
+- **Display Favicon:** Shows website favicons for entries (enabled by default)
+
+## Security
+
+### Implementation
+
+This extension leverages the KeePassXC command-line interface (CLI). All applicable CLI security considerations apply. For comprehensive details, refer to the [KeePassXC CLI documentation](https://keepassxc.org/docs/KeePassXC_UserGuide#_command_line_tool).
+
+### Credential Storage
+
+Your credentials required to access your KeePass database, which include a password and an optional key file, are securely stored in [Raycast's local encrypted database](https://developers.raycast.com/information/security#data-storage). This storage prevents other extensions from accessing the storage of that extension.

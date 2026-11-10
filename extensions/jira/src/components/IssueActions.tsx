@@ -1,5 +1,5 @@
-import { Action, ActionPanel, Icon, showToast, Toast } from "@raycast/api";
-import { MutatePromise, useCachedPromise } from "@raycast/utils";
+import { Action, ActionPanel, closeMainWindow, getPreferenceValues, Icon, showToast, Toast, open } from "@raycast/api";
+import { MutatePromise } from "@raycast/utils";
 import { useState } from "react";
 
 import {
@@ -20,19 +20,23 @@ import { getJiraCredentials } from "../api/jiraCredentials";
 import { autocompleteUsers, User } from "../api/users";
 import { getUserAvatar } from "../helpers/avatars";
 import { getErrorMessage } from "../helpers/errors";
-import { slugify } from "../helpers/string";
+import { generateBranchName } from "../helpers/issues";
+import { getIssueUrl } from "../helpers/urls";
 
 import CreateIssueForm from "./CreateIssueForm";
 import IssueAttachments from "./IssueAttachments";
+import IssueChildIssues from "./IssueChildIssues";
 import IssueCommentForm from "./IssueCommentForm";
 import IssueComments from "./IssueComments";
 import IssueDetail from "./IssueDetail";
+import { useJiraCachedPromise } from "../hooks/useJiraCache";
 
 type IssueActionsProps = {
   issue: Issue | TIssueDetail;
   mutate?: MutatePromise<Issue[] | undefined>;
   mutateDetail?: MutatePromise<Issue | TIssueDetail | null>;
   showDetailsAction?: boolean;
+  showChildIssuesAction?: boolean;
   showAttachmentsAction?: boolean;
 };
 
@@ -46,10 +50,11 @@ export default function IssueActions({
   mutate,
   mutateDetail,
   showDetailsAction,
+  showChildIssuesAction,
   showAttachmentsAction,
 }: IssueActionsProps) {
   const { siteUrl, myself } = getJiraCredentials();
-  const issueUrl = `${siteUrl.startsWith("https://") ? siteUrl : `https://${siteUrl}`}/browse/${issue.key}`;
+  const issueUrl = getIssueUrl(issue.key, siteUrl);
 
   async function mutateWithOptimisticUpdate({ asyncUpdate, optimisticUpdate }: MutateParams) {
     if (mutate) {
@@ -143,6 +148,8 @@ export default function IssueActions({
     }
   }
 
+  const { open_in, branch_name } = getPreferenceValues<Preferences>();
+
   return (
     <ActionPanel title={issue.key}>
       <ActionPanel.Section>
@@ -154,7 +161,18 @@ export default function IssueActions({
           />
         ) : null}
 
-        <Action.OpenInBrowser url={issueUrl} />
+        {open_in ? (
+          <Action
+            title={`Open in ${open_in.name}`}
+            icon={Icon.Globe}
+            onAction={async () => {
+              open(issueUrl, open_in);
+              closeMainWindow();
+            }}
+          />
+        ) : (
+          <Action.OpenInBrowser url={issueUrl} />
+        )}
 
         {showAttachmentsAction && "attachment" in issue.fields ? (
           <Action.Push
@@ -166,12 +184,29 @@ export default function IssueActions({
       </ActionPanel.Section>
 
       <ActionPanel.Section>
+        {issue.fields.parent && (
+          <Action.Push
+            target={<IssueDetail initialIssue={issue.fields.parent} issueKey={issue.fields.parent?.key} />}
+            title="Open Parent Issue"
+            icon={Icon.ChevronUp}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "u" }}
+          />
+        )}
+
+        {showChildIssuesAction && (
+          <Action.Push
+            target={<IssueChildIssues issue={issue} />}
+            title="Open Child Issues"
+            icon={Icon.Tree}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "o" }}
+          />
+        )}
         <ChangePrioritySubmenu issue={issue} mutate={mutateWithOptimisticUpdate} />
 
         <ChangeAssigneeSubmenu issue={issue} mutate={mutateWithOptimisticUpdate} />
 
         <Action
-          title={isAssignedToMe ? "Un-Assign From Me" : "Assign to Me"}
+          title={isAssignedToMe ? "Un-Assign from Me" : "Assign to Me"}
           icon={getUserAvatar(myself)}
           shortcut={{ modifiers: ["cmd", "shift"], key: "i" }}
           onAction={assignToMe}
@@ -236,8 +271,14 @@ export default function IssueActions({
 
         <Action.CopyToClipboard
           title="Copy Git Branch Name"
-          content={`${issue.key}-${slugify(issue.fields.summary)}`}
+          content={generateBranchName(issue, branch_name)}
           shortcut={{ modifiers: ["cmd", "shift"], key: "." }}
+        />
+
+        <Action.CopyToClipboard
+          title="Copy Markdown Link"
+          content={`[${issue.key} - ${issue.fields.summary}](${issueUrl})`}
+          shortcut={{ modifiers: ["cmd", "opt", "shift"], key: "," }}
         />
       </ActionPanel.Section>
 
@@ -269,7 +310,7 @@ type SubmenuProps = {
 function ChangePrioritySubmenu({ issue, mutate }: SubmenuProps) {
   const [load, setLoad] = useState(false);
 
-  const { data: priorities, isLoading } = useCachedPromise(() => getIssuePriorities(), [], { execute: load });
+  const { data: priorities, isLoading } = useJiraCachedPromise(() => getIssuePriorities(), [], { execute: load });
 
   async function changePriority(priority: Priority) {
     try {
@@ -316,7 +357,7 @@ function ChangePrioritySubmenu({ issue, mutate }: SubmenuProps) {
       onOpen={() => setLoad(true)}
     >
       {isLoading ? (
-        <Action title="Loading..." />
+        <Action title="Loading…" />
       ) : (
         priorities?.map((priority) => {
           return (
@@ -339,13 +380,17 @@ function ChangeAssigneeSubmenu({ issue, mutate }: SubmenuProps) {
   const [query, setQuery] = useState("");
   const { myself } = getJiraCredentials();
 
-  const { data, isLoading: isLoadingMetadata } = useCachedPromise((issue) => getIssueEditMetadata(issue.id), [issue], {
-    execute: load,
-  });
+  const { data, isLoading: isLoadingMetadata } = useJiraCachedPromise(
+    (issue) => getIssueEditMetadata(issue.id),
+    [issue],
+    {
+      execute: load,
+    },
+  );
   const autocompleteURL = data?.fields.assignee.autoCompleteUrl;
 
   // Find a way to display current users then search for users
-  const { data: users, isLoading: isLoadingUsers } = useCachedPromise(
+  const { data: users, isLoading: isLoadingUsers } = useJiraCachedPromise(
     (query) => {
       if (!autocompleteURL) {
         return Promise.resolve([]);
@@ -390,7 +435,7 @@ function ChangeAssigneeSubmenu({ issue, mutate }: SubmenuProps) {
 
   return (
     <ActionPanel.Submenu
-      title="Assign To"
+      title="Assign to"
       icon={Icon.AddPerson}
       shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
       onOpen={() => setLoad(true)}
@@ -420,7 +465,7 @@ function ChangeAssigneeSubmenu({ issue, mutate }: SubmenuProps) {
 function ChangeStatusSubmenu({ issue, mutate }: SubmenuProps) {
   const [load, setLoad] = useState(false);
 
-  const { data: transitions, isLoading } = useCachedPromise((issue) => getIssueTransitions(issue.id), [issue], {
+  const { data: transitions, isLoading } = useJiraCachedPromise((issue) => getIssueTransitions(issue.id), [issue], {
     execute: load,
   });
 
@@ -476,7 +521,7 @@ function ChangeStatusSubmenu({ issue, mutate }: SubmenuProps) {
       onOpen={() => setLoad(true)}
     >
       {isLoading ? (
-        <Action title="Loading..." />
+        <Action title="Loading…" />
       ) : (
         transitions?.map((transition) => {
           if (transition.to.id === issue.fields.status.id) {

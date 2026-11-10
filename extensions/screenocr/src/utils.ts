@@ -1,55 +1,54 @@
-import { environment } from "@raycast/api";
-import { join } from "path";
-import { execa, ExecaError } from "execa";
-import { chmod } from "fs/promises";
-import { getUserSelectedLanguages, usePreferences } from "./hooks";
+import { getPreferenceValues, showToast, Toast } from "@raycast/api";
+import { showFailureToast as showRaycastFailureToast } from "@raycast/utils";
+import { CaptureMode, RecognitionOutcome } from "./ocr/types";
 
-const recognizeText = async (isFullScreen = false) => {
-  const preference = usePreferences();
-  const command = join(environment.assetsPath, "recognize-text");
-  await chmod(command, "755");
-
-  try {
-    const languages = await getUserSelectedLanguages();
-
-    const args: string[] = [];
-
-    if (isFullScreen) {
-      args.push("--fullscreen");
-    }
-
-    if (preference.languageCorrection) {
-      args.push("--languagecorrection");
-    }
-
-    if (preference.ocrMode === "fast") {
-      args.push("--fast");
-    }
-
-    if (preference.ignoreLineBreaks) {
-      args.push("--ignorelinebreaks");
-    }
-
-    if (preference.keepImage) {
-      args.push("--keepImage");
-    }
-
-    if (preference.customWordsList) {
-      args.push("--customwordslist", preference.customWordsList);
-    }
-
-    args.push("--languages");
-    args.push(languages.map((lang) => lang.value).join(" "));
-
-    const { stdout } = await execa(command, args);
-    return stdout;
-  } catch (error) {
-    if ((error as ExecaError).stdout === "No text selected") {
-      return undefined;
-    } else {
-      throw error;
-    }
+export async function recognize(
+  mode: CaptureMode,
+): Promise<RecognitionOutcome> {
+  if (process.platform === "win32") {
+    const { recognizeWindows } = await import("./ocr/windows");
+    return recognizeWindows(mode);
   }
+  return {
+    status: "error",
+    message: "Windows OCR is only available on Windows",
+  };
+}
+
+export async function detectBarcode(): Promise<RecognitionOutcome> {
+  return {
+    status: "error",
+    message:
+      "Barcode and QR code detection is currently available only on macOS",
+  };
+}
+
+export const showSuccessToast = async (title: string) => {
+  const preference = getPreferenceValues<Preferences>();
+  if (preference.showToast)
+    await showToast({ style: Toast.Style.Success, title });
 };
 
-export { recognizeText };
+export const showFailureToast = async (
+  error: unknown,
+  options?: { title?: string },
+) => {
+  const preference = getPreferenceValues<Preferences>();
+  if (preference.showToast) await showRaycastFailureToast(error, options);
+};
+
+export const RECOGNIZING_TOAST_TITLE = "Recognizing…";
+
+// Caller must hide the returned toast; undefined when toasts are disabled.
+export const showRecognizingToast = async (): Promise<Toast | undefined> => {
+  const preference = getPreferenceValues<Preferences>();
+  if (!preference.showToast) return undefined;
+  return showToast({
+    style: Toast.Style.Animated,
+    title: RECOGNIZING_TOAST_TITLE,
+  });
+};
+
+export const hideToast = async (toast: Toast | undefined) => {
+  await toast?.hide();
+};

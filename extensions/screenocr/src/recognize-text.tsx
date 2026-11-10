@@ -1,20 +1,30 @@
-import { Clipboard, closeMainWindow, showHUD } from "@raycast/api";
-import { recognizeText } from "./utils";
+import { closeMainWindow, LaunchProps } from "@raycast/api";
+import { recognize } from "./utils";
+import { handleRecognitionOutcome } from "./ocr/result";
+import { LaunchContext } from "./types";
+import { RecognitionOutcome } from "./ocr/types";
 
-export default async function command() {
-  await closeMainWindow();
-
-  try {
-    const recognizedText = await recognizeText();
-
-    if (!recognizedText) {
-      return await showHUD("❌ No text detected!");
-    }
-
-    await Clipboard.copy(recognizedText);
-    await showHUD("✅ Copied text to clipboard");
-  } catch (e) {
-    console.error(e);
-    await showHUD("❌ Failed detecting text");
+export default async function command(
+  props: LaunchProps<{ launchContext?: LaunchContext }>,
+) {
+  if (process.platform === "darwin") {
+    const { recognizeTextCommand } = await import("./ocr/macos-commands");
+    return recognizeTextCommand(props);
   }
+
+  const { launchContext } = props;
+  let outcome: RecognitionOutcome;
+  try {
+    await closeMainWindow();
+    outcome = await recognize("area");
+  } catch (error) {
+    outcome = {
+      status: "error",
+      message:
+        error instanceof Error ? error.message : "Failed to recognize text",
+    };
+  }
+  await handleRecognitionOutcome(outcome, {
+    callbackOptions: launchContext?.callbackLaunchOptions,
+  });
 }

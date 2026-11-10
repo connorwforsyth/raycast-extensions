@@ -12,16 +12,43 @@ import {
   XcodeSimulatorOpenUrlErrorReason,
 } from "../models/xcode-simulator/xcode-simulator-open-url-error.model";
 import { XcodeSimulatorStateFilter } from "../models/xcode-simulator/xcode-simulator-state-filter.model";
+import { getDefaultApplication, LocalStorage, open } from "@raycast/api";
+
+/**
+ * LocalStorage key prefix for the recent simulators history.
+ * Each simulator is stored under its own key to avoid read-modify-write races.
+ */
+const RECENT_SIMULATOR_KEY_PREFIX = "xcode_recent_simulator_";
 
 /**
  * XcodeSimulatorService
  */
 export class XcodeSimulatorService {
   /**
-   * Launches simulator application
+   * Launches the simulator GUI application.
+   * Respect the default device-link handler, including third-party viewers.
+   * Fall back to Apple's viewers when no device-link handler can be opened.
    */
-  static launchSimulatorApplication(): Promise<void> {
-    return execAsync(`open -b "com.apple.iphonesimulator"`).then();
+  static async launchSimulatorApplication(simulatorUDID?: string): Promise<void> {
+    try {
+      if (simulatorUDID) {
+        await open(`devices://device/open?id=${encodeURIComponent(simulatorUDID)}`);
+      } else {
+        // Opening the app avoids sending an unsupported, device-less URL.
+        const application = await getDefaultApplication("devices://");
+        await open(application.path);
+      }
+      return;
+    } catch {
+      // Older Xcode versions may not register a device-link handler.
+    }
+    try {
+      // Device Hub (Xcode 27+)
+      await execAsync(`open -b "com.apple.dt.Devices"`);
+    } catch {
+      // Simulator.app (Xcode 26 and earlier)
+      await execAsync(`open -b "com.apple.iphonesimulator"`);
+    }
   }
 
   /**
@@ -31,6 +58,13 @@ export class XcodeSimulatorService {
    */
   static async xcodeSimulatorGroups(filter: XcodeSimulatorStateFilter): Promise<XcodeSimulatorGroup[]> {
     const simulators = await XcodeSimulatorService.xcodeSimulators();
+    const history = await XcodeSimulatorService.getRecentSimulatorHistory();
+
+    // Attach lastUsed timestamp to each simulator
+    for (const sim of simulators) {
+      sim.lastUsed = history[sim.udid] ?? 0;
+    }
+
     return groupBy(
       simulators.filter(
         (value) =>
@@ -41,7 +75,22 @@ export class XcodeSimulatorService {
       .map((group) => {
         return { runtime: group.key, simulators: group.values };
       })
-      .sort((lhs, rhs) => lhs.runtime.localeCompare(rhs.runtime));
+      .sort((lhs, rhs) => {
+        // Sort by numeric version parts (newest first).
+        // e.g. "iOS 17.0" > "iOS 9.0", "tvOS 2.0" > "iOS 17.0"
+        const a = lhs.runtime.split(" ");
+        const b = rhs.runtime.split(" ");
+        const osCmp = a[0].localeCompare(b[0]);
+        if (osCmp !== 0) return osCmp;
+        const aVersion = a.slice(1).join(".").split(".").map(Number);
+        const bVersion = b.slice(1).join(".").split(".").map(Number);
+        for (let i = 0; i < Math.max(aVersion.length, bVersion.length); i++) {
+          const aPart = aVersion[i] ?? 0;
+          const bPart = bVersion[i] ?? 0;
+          if (aPart !== bPart) return bPart - aPart;
+        }
+        return 0;
+      });
   }
 
   /**
@@ -79,22 +128,24 @@ export class XcodeSimulatorService {
 
   /**
    * Boot XcodeSimulator
-   * @param xcodeSimulator The XcodeSimulator to boot
+   * @param xcodeSimulatorUDID The XcodeSimulator UDID to boot
    */
-  static boot(xcodeSimulator: XcodeSimulator): Promise<void> {
-    return execAsync(`xcrun simctl boot ${xcodeSimulator.udid}`).then(() => {
+  static boot(xcodeSimulatorUDID: string): Promise<void> {
+    return execAsync(`xcrun simctl boot ${xcodeSimulatorUDID}`).then(() => {
+      // Track usage for recent history
+      XcodeSimulatorService.trackSimulatorUsage(xcodeSimulatorUDID);
       // Silently launch Simulator application
-      XcodeSimulatorService.launchSimulatorApplication();
+      return XcodeSimulatorService.launchSimulatorApplication(xcodeSimulatorUDID);
     });
   }
 
   /**
    * Shutdown XcodeSimulator
-   * @param xcodeSimulator The XcodeSimulator to shutdown
+   * @param xcodeSimulatorUDID The XcodeSimulator UDID to shutdown
    */
-  static shutdown(xcodeSimulator: XcodeSimulator): Promise<void> {
+  static shutdown(xcodeSimulatorUDID: string): Promise<void> {
     // Shutdown Simulator
-    return execAsync(`xcrun simctl shutdown ${xcodeSimulator.udid}`).then();
+    return execAsync(`xcrun simctl shutdown ${xcodeSimulatorUDID}`).then();
   }
 
   /**
@@ -103,21 +154,21 @@ export class XcodeSimulatorService {
   static toggle(xcodeSimulator: XcodeSimulator): Promise<void> {
     switch (xcodeSimulator.state) {
       case XcodeSimulatorState.booted:
-        return XcodeSimulatorService.shutdown(xcodeSimulator);
+        return XcodeSimulatorService.shutdown(xcodeSimulator.udid);
       case XcodeSimulatorState.shuttingDown:
         return Promise.resolve();
       case XcodeSimulatorState.shutdown:
-        return XcodeSimulatorService.boot(xcodeSimulator);
+        return XcodeSimulatorService.boot(xcodeSimulator.udid);
     }
   }
 
   /**
    * Restart XcodeSimulator
-   * @param xcodeSimulator The XcodeSimulator to restart
+   * @param xcodeSimulatorUDID The XcodeSimulator udid to restart
    */
-  static async restart(xcodeSimulator: XcodeSimulator): Promise<void> {
-    await XcodeSimulatorService.shutdown(xcodeSimulator);
-    await XcodeSimulatorService.boot(xcodeSimulator);
+  static async restart(xcodeSimulatorUDID: string): Promise<void> {
+    await XcodeSimulatorService.shutdown(xcodeSimulatorUDID);
+    await XcodeSimulatorService.boot(xcodeSimulatorUDID);
   }
 
   /**
@@ -133,11 +184,15 @@ export class XcodeSimulatorService {
   ): Promise<void> {
     try {
       // Boot Xcode Simulator and ignore any errors
-      await XcodeSimulatorService.boot(xcodeSimulator);
+      await XcodeSimulatorService.boot(xcodeSimulator.udid);
       // eslint-disable-next-line no-empty
     } catch {}
     // Launch application by bundle identifier
-    return execAsync(["xcrun", "simctl", action, xcodeSimulator.udid, bundleIdentifier].join(" ")).then();
+    await execAsync(["xcrun", "simctl", action, xcodeSimulator.udid, bundleIdentifier].join(" "));
+    if (action === XcodeSimulatorAppAction.launch) {
+      // boot() rejects for an already-booted simulator, so show its viewer here too.
+      await XcodeSimulatorService.launchSimulatorApplication(xcodeSimulator.udid);
+    }
   }
 
   /**
@@ -155,7 +210,7 @@ export class XcodeSimulatorService {
   ): Promise<void> {
     try {
       // Boot Xcode Simulator and ignore any errors
-      await XcodeSimulatorService.boot(xcodeSimulator);
+      await XcodeSimulatorService.boot(xcodeSimulator.udid);
       // eslint-disable-next-line no-empty
     } catch {}
     return execAsync(
@@ -174,17 +229,17 @@ export class XcodeSimulatorService {
   /**
    * Opens a URL in a Simulator
    * @param url The url which should be opened
-   * @param simulator The optional Simulator where the url should be opened.
+   * @param simulatorUDID The optional simulator udid where the url should be opened.
    */
-  static async openUrl(url: string, simulator?: XcodeSimulator) {
+  static async openUrl(url: string, simulatorUDID?: string) {
     // Trim url
     const trimmedUrl = url.trim();
     // Check if the url has a valid scheme e.g. (maps://, https://raycast.com)
     if (!XcodeSimulatorService.isValidUrl(trimmedUrl)) {
       throw new XcodeSimulatorOpenUrlError(XcodeSimulatorOpenUrlErrorReason.badUrl);
     }
-    // Check if no simulator is presented
-    if (!simulator) {
+    // Check if no simulator udid is presented
+    if (!simulatorUDID) {
       // Check if Xcode is not installed
       if (!(await XcodeService.isXcodeInstalled())) {
         // Throw error
@@ -199,10 +254,12 @@ export class XcodeSimulatorService {
       }
     }
     // Open URL in simulator
-    return execAsync(["xcrun", "simctl", "openurl", simulator?.udid ?? "booted", trimmedUrl].join(" ")).then(() => {
-      // Silently launch Simulator application
-      XcodeSimulatorService.launchSimulatorApplication();
-    });
+    return execAsync(["xcrun", "simctl", "openurl", simulatorUDID ?? "booted", `"${trimmedUrl}"`].join(" ")).then(
+      () => {
+        // Silently launch Simulator application
+        return XcodeSimulatorService.launchSimulatorApplication(simulatorUDID);
+      }
+    );
   }
 
   /**
@@ -220,6 +277,16 @@ export class XcodeSimulatorService {
   }
 
   /**
+   * Deletes App Files without uninstalling the app
+   * @param containerPath App Container Directory
+   * @param appGroupPath App Group Directory
+   */
+  static async deleteAppFiles(containerPath: string, appGroupPath?: string): Promise<void> {
+    const deleteAppGroupPathPromise = appGroupPath ? execAsync(`rm -rf ${appGroupPath}`) : Promise.resolve();
+    return Promise.all([execAsync(`rm -rf ${containerPath}`), deleteAppGroupPathPromise]).then();
+  }
+
+  /**
    * Rename XcodeSimulator
    * @param xcodeSimulator The Xcode Simulator to rename
    * @param name The new simulator name
@@ -229,10 +296,80 @@ export class XcodeSimulatorService {
   }
 
   /**
-   * Rename XcodeSimulator
+   * Deletes a XcodeSimulator
+   * @param xcodeSimulator The Xcode Simulator to delete
+   */
+  static async delete(xcodeSimulator: XcodeSimulator): Promise<void> {
+    return execAsync(`xcrun simctl delete ${xcodeSimulator.udid}`).then();
+  }
+
+  /**
+   * Trigger iCloud Sync for XcodeSimulator
    * @param xcodeSimulator The Xcode Simulator to trigger iCloud Sync to
    */
   static async triggerIcloudSync(xcodeSimulator: XcodeSimulator): Promise<void> {
     return execAsync(`xcrun simctl icloud_sync ${xcodeSimulator.udid}`).then();
+  }
+
+  /**
+   * Retrieve the recent simulator history from LocalStorage.
+   * Each simulator is stored under its own key to avoid read-modify-write races.
+   * @returns A map of simulator UDID to last-used timestamp.
+   */
+  static async getRecentSimulatorHistory(): Promise<Record<string, number>> {
+    try {
+      // LocalStorage doesn't support listing keys by prefix,
+      // so we keep a lightweight index of known UDIDs.
+      const indexRaw = await LocalStorage.getItem<string>("xcode_recent_simulator_index");
+      const udidList: string[] = indexRaw ? JSON.parse(indexRaw) : [];
+
+      const history: Record<string, number> = {};
+      for (const udid of udidList) {
+        const raw = await LocalStorage.getItem<string>(`${RECENT_SIMULATOR_KEY_PREFIX}${udid}`);
+        if (raw) {
+          history[udid] = Number(raw);
+        }
+      }
+      return history;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Track usage of a simulator by updating its last-used timestamp in LocalStorage.
+   * Each simulator is stored under its own key to avoid read-modify-write races
+   * when multiple operations run concurrently.
+   * @param udid The UDID of the simulator to track.
+   */
+  static async trackSimulatorUsage(udid: string): Promise<void> {
+    try {
+      const key = `${RECENT_SIMULATOR_KEY_PREFIX}${udid}`;
+      await LocalStorage.setItem(key, String(Date.now()));
+
+      // Update the index of known UDIDs
+      const indexRaw = await LocalStorage.getItem<string>("xcode_recent_simulator_index");
+      const udidList: string[] = indexRaw ? JSON.parse(indexRaw) : [];
+      if (!udidList.includes(udid)) {
+        udidList.push(udid);
+        await LocalStorage.setItem("xcode_recent_simulator_index", JSON.stringify(udidList));
+      }
+    } catch {
+      // Silently ignore tracking errors
+    }
+  }
+
+  /**
+   * Toggle the appearance (Dark/Light mode) of a booted Xcode Simulator.
+   * @param xcodeSimulator The booted Xcode Simulator
+   * @returns The new appearance ("dark" or "light")
+   */
+  static async toggleAppearance(xcodeSimulator: XcodeSimulator): Promise<"dark" | "light"> {
+    const { stdout } = await execAsync(`xcrun simctl ui ${xcodeSimulator.udid} appearance`);
+    const currentIsDark = stdout.trim().toLowerCase().includes("dark");
+    const newMode = currentIsDark ? "light" : "dark";
+    await execAsync(`xcrun simctl ui ${xcodeSimulator.udid} appearance ${newMode}`);
+    await XcodeSimulatorService.trackSimulatorUsage(xcodeSimulator.udid);
+    return newMode;
   }
 }

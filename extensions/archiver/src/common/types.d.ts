@@ -5,6 +5,7 @@ interface ICompressPreferences {
   deleteAfterCompression: boolean;
   locationSaveCompressed: string;
   defaultCompressionFormat: CompressFormat;
+  revealInFinder: boolean;
   useOriginalNameWhenSingle: boolean;
   useParentFolderNameWhenMultiple: boolean;
 }
@@ -13,6 +14,7 @@ interface IExtractPreferences {
   defaultExtractSelected: boolean;
   deleteAfterExtraction: boolean;
   locationSaveExtracted: string;
+  revealExtracted: boolean;
 }
 
 interface IFileInfo {
@@ -23,4 +25,19 @@ interface IFileInfo {
 interface FormatMetadata {
   ext: string;
   color: Color;
+}
+
+interface ZipEntry {
+  name: string;
+  isDirectory: boolean;
+  size: number;
+  path: string;
+  lastModDate: Date;
+}
+
+interface ZipFile {
+  fileName: string;
+  fullPath: string;
+  entries: ZipEntry[];
+  currentDir: string;
 }

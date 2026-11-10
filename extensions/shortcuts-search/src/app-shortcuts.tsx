@@ -1,183 +1,108 @@
-import {
-  Action,
-  ActionPanel,
-  closeMainWindow,
-  getFrontmostApplication,
-  getPreferenceValues,
-  Icon,
-  List,
-  PopToRootType,
-} from "@raycast/api";
-import { showFailureToast, usePromise } from "@raycast/utils";
-import { useEffect, useState } from "react";
-import { runShortcuts } from "./engine/shortcut-runner";
-import { Application, AtomicShortcut, Keymap, Section, SectionShortcut } from "./model/internal/internal-models";
-import { modifierSymbols } from "./model/internal/modifiers";
-import useAllShortcuts from "./load/shortcuts-provider";
-import useKeyCodes from "./load/key-codes-provider";
+import { Action, ActionPanel, getFrontmostApplication, Icon, List } from "@raycast/api";
+import { usePromise } from "@raycast/utils";
+import { useEffect, useMemo, useState } from "react";
+import { useAppShortcuts } from "./load/app-shortcuts-provider";
+import { useApps } from "./load/apps-provider";
+import { ShortcutsList } from "./view/shortcuts-list";
+import { UnsupportedApp } from "./view/unsupported-app";
+import { getPlatform } from "./load/platform";
+import { findMatchingApps, windowsProcessName } from "./app-matching";
+import { getDesktopTarget } from "./engine/desktop-target";
 
-interface Preferences {
-  delay: string;
+interface AppShortcutsProps {
+  slug?: string;
+  initialKeymapTitle?: string;
+  initialSearchText?: string;
 }
 
-function KeymapDropdown(props: { keymaps: string[]; onKeymapChange: (newValue: string) => void }) {
-  const { keymaps, onKeymapChange } = props;
-  if (keymaps.length == 1) {
-    return null;
-  }
-  return (
-    <List.Dropdown
-      tooltip="Select Keymap"
-      storeValue={true}
-      onChange={(newValue) => {
-        onKeymapChange(newValue);
-      }}
-    >
-      <List.Dropdown.Section title="Keymaps">
-        {keymaps.map((keymap) => (
-          <List.Dropdown.Item key={keymap} title={keymap} value={keymap} />
-        ))}
-      </List.Dropdown.Section>
-    </List.Dropdown>
-  );
-}
-
-export default function AppShortcuts(props?: { app: Application }) {
-  const [application, setApplication] = useState<Application | undefined>(props?.app);
-  const [bundleId, setBundleId] = useState(props?.app?.bundleId);
-  const [keymaps, setKeymaps] = useState<string[]>([]);
-  const [keymapSections, setKeymapSections] = useState<Section[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const keyCodesResponse = useKeyCodes();
-  const shortcutsProviderResponse = useAllShortcuts({ execute: !props?.app });
-
-  useEffect(() => {
-    if (application || shortcutsProviderResponse.isLoading || !bundleId) {
-      return;
-    }
-    const foundApp = shortcutsProviderResponse.data.applications.find((app) => app.bundleId === bundleId);
-    if (!foundApp) {
-      // noinspection JSIgnoredPromiseFromCall
-      closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-      // noinspection JSIgnoredPromiseFromCall
-      showFailureToast(undefined, { title: `Shortcuts not available for application ${bundleId}` });
-      return;
-    }
-    setApplication(foundApp);
-  }, [shortcutsProviderResponse.isLoading, bundleId, application]);
-
-  useEffect(() => {
-    if (!application) return;
-    const foundKeymaps = application?.keymaps.map((k) => k.title) ?? [];
-    const foundSections = application?.keymaps[0].sections ?? [];
-    setKeymaps(foundKeymaps);
-    setKeymapSections(foundSections);
-    setIsLoading(false);
-  }, [application]);
-
-  usePromise(async () => application?.bundleId ?? (await getFrontmostApplication()).bundleId, [], {
-    onData: (bundleId) => {
-      if (!bundleId) return;
-      setBundleId(bundleId);
-    },
-    execute: !props?.app,
+export default function AppShortcuts(props?: AppShortcutsProps) {
+  const [slug, setSlug] = useState<string | undefined>(props?.slug);
+  const { isLoading: appsLoading, data: apps } = useApps();
+  const { isLoading: shortcutsLoading, data: application, favorites, toggleFavorite } = useAppShortcuts(slug);
+  const { isLoading: appIdLoading, data: native } = usePromise(getFrontmostApplication, [], {
+    execute: !props?.slug,
+    failureToastOptions: { title: "Could not detect the frontmost application" },
   });
+  const matches = useMemo(() => (native ? findMatchingApps(apps, native, getPlatform()) : []), [apps, native]);
 
-  const onKeymapChange = (newValue: string) => {
-    setKeymapSections(selectKeymap(application?.keymaps ?? [], newValue)?.sections ?? []);
-  };
+  useEffect(() => {
+    if (slug || appsLoading || appIdLoading) return;
+    if (matches.length === 1) setSlug(matches[0].slug);
+  }, [native, appIdLoading, slug, matches, appsLoading]);
 
-  async function executeShortcut(bundleId: string | undefined, shortcutSequence: AtomicShortcut[]) {
-    if (keyCodesResponse.data === undefined) return;
-    const delay: number = parseFloat(getPreferenceValues<Preferences>().delay);
-    await closeMainWindow({ popToRootType: PopToRootType.Immediate });
-    await runShortcuts(bundleId, delay, shortcutSequence, keyCodesResponse.data);
+  const { isLoading: targetLoading, data: selectedTarget } = usePromise(
+    async (app) => (app ? getDesktopTarget(app) : undefined),
+    [application],
+    {
+      failureToastOptions: { title: "Could not resolve the application target" },
+    }
+  );
+  const currentProcess = getPlatform() === "windows" && !props?.slug && native ? windowsProcessName(native) : undefined;
+  const currentIdentityVerified =
+    application &&
+    (!application.windowsAppId ||
+      native?.windowsAppId === application.windowsAppId ||
+      (!native?.windowsAppId &&
+        !targetLoading &&
+        selectedTarget &&
+        "windowsProcessName" in selectedTarget &&
+        selectedTarget.windowsProcessName.toLowerCase() === currentProcess?.toLowerCase()));
+  const target = currentProcess
+    ? currentIdentityVerified
+      ? { kind: "desktop" as const, windowsProcessName: currentProcess }
+      : undefined
+    : targetLoading
+      ? undefined
+      : selectedTarget;
+
+  if (!slug && !appsLoading && !appIdLoading && !native) {
+    return (
+      <UnsupportedApp
+        title="Could not detect the frontmost application"
+        description="Focus an application window and run the command again."
+      />
+    );
+  }
+
+  if (!slug && !appsLoading && !appIdLoading && native && matches.length === 0) {
+    return (
+      <UnsupportedApp
+        title={`No shortcuts for ${native.name} yet`}
+        description="Add this app to the public Hotkys catalog using the contribution guide, or create private shortcuts on hotkys.com."
+        identifier={getPlatform() === "windows" ? (native.windowsAppId ?? windowsProcessName(native)) : native.bundleId}
+      />
+    );
+  }
+
+  if (!slug && !appsLoading && !appIdLoading && matches.length > 1) {
+    return (
+      <List navigationTitle={`Shortcuts for ${native?.name}`} searchBarPlaceholder="Choose a shortcut collection">
+        {matches.map((app) => (
+          <List.Item
+            key={app.slug}
+            title={app.name}
+            subtitle={app.customAppId ? "My App" : "Public Catalog"}
+            icon={Icon.AppWindow}
+            actions={
+              <ActionPanel>
+                <Action title="Show Shortcuts" onAction={() => setSlug(app.slug)} />
+              </ActionPanel>
+            }
+          />
+        ))}
+      </List>
+    );
   }
 
   return (
-    <List
-      isLoading={isLoading}
-      searchBarPlaceholder="Search for shortcuts"
-      searchBarAccessory={<KeymapDropdown keymaps={keymaps} onKeymapChange={onKeymapChange} />}
-      navigationTitle={application?.name}
-    >
-      {keymapSections.map((section) => {
-        return (
-          <List.Section key={section.title} title={section.title}>
-            {section.hotkeys.map((shortcut) => {
-              return (
-                <List.Item
-                  key={shortcut.title}
-                  title={shortcut.title}
-                  subtitle={generateHotkeyText(shortcut)}
-                  accessories={
-                    shortcut.comment
-                      ? [
-                          {
-                            text: shortcut.comment,
-                            icon: Icon.SpeechBubble,
-                          },
-                        ]
-                      : undefined
-                  }
-                  keywords={[section.title]}
-                  actions={
-                    shortcut.sequence.length > 0 ? (
-                      <ActionPanel>
-                        <Action
-                          title="Apply"
-                          onAction={() => application && executeShortcut(application.bundleId, shortcut.sequence)}
-                        />
-                      </ActionPanel>
-                    ) : undefined
-                  }
-                />
-              );
-            })}
-          </List.Section>
-        );
-      })}
-    </List>
+    <ShortcutsList
+      application={application}
+      executionTarget={target}
+      favorites={favorites}
+      initialKeymapTitle={props?.initialKeymapTitle}
+      initialSearchText={props?.initialSearchText}
+      isLoading={appsLoading || shortcutsLoading || (!props?.slug && appIdLoading)}
+      onToggleFavorite={toggleFavorite}
+    />
   );
 }
-
-function selectKeymap(keymaps: Keymap[], keymapName: string): Keymap | undefined {
-  return keymaps.find((keymap) => keymap.title === keymapName);
-}
-
-function generateHotkeyText(shortcut: SectionShortcut): string {
-  return shortcut.sequence
-    .map((atomicShortcut) => {
-      const modifiersText = atomicShortcut.modifiers.map((modifier) => modifierSymbols.get(modifier)).join("") ?? "";
-      return modifiersText + overrideSymbolIfPossible(atomicShortcut.base);
-    })
-    .join(" ");
-}
-
-function overrideSymbolIfPossible(base: string) {
-  if (baseKeySymbolOverride.has(base)) {
-    return baseKeySymbolOverride.get(base);
-  }
-  return base.toUpperCase();
-}
-
-const baseKeySymbolOverride: Map<string, string> = new Map([
-  ["left", "←"],
-  ["right", "→"],
-  ["up", "↑"],
-  ["down", "↓"],
-  ["pageup", "PgUp"],
-  ["pagedown", "PgDown"],
-  ["home", "Home"],
-  ["end", "End"],
-  ["space", "Space"],
-  ["capslock", "⇪"],
-  ["backspace", "⌫"],
-  ["tab", "⇥"],
-  ["esc", "⎋"],
-  ["enter", "↩"],
-  ["cmd", "⌘"],
-  ["ctrl", "⌃"],
-  ["opt", "⌥"],
-  ["shift", "⇧"],
-]);

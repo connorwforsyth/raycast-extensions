@@ -1,38 +1,39 @@
 import { List } from '@raycast/api';
-import { useEffect, useState } from 'react';
 
-import Service, { Account, Member } from './service';
-import { getMemberStatusIcon, getToken, handleNetworkError } from './utils';
-
-const service = new Service(getToken());
+import { Member } from './service';
+import { getMemberStatusIcon, handleNetworkError } from './utils';
+import { useCachedPromise } from '@raycast/utils';
+import { getCloudflareService, withCloudflareAccessToken } from './oauth';
 
 function Command() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [members, setMembers] = useState<Record<string, Member[]>>({});
-  const [isLoading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchMembers() {
-      try {
-        const accounts = await service.listAccounts();
-        setAccounts(accounts);
-
-        const members: Record<string, Member[]> = {};
-        for (let i = 0; i < accounts.length; i++) {
-          const account = accounts[i];
-          const accountMembers = await service.listMembers(account.id);
-          members[account.id] = accountMembers;
-        }
-        setMembers(members);
-        setLoading(false);
-      } catch (e) {
-        setLoading(false);
-        handleNetworkError(e);
+  const {
+    isLoading,
+    data: { accounts, members },
+  } = useCachedPromise(
+    async () => {
+      const accounts = await getCloudflareService().listAccounts();
+      const members: Record<string, Member[]> = {};
+      for (let i = 0; i < accounts.length; i++) {
+        const account = accounts[i];
+        const accountMembers = await getCloudflareService().listMembers(
+          account.id,
+        );
+        members[account.id] = accountMembers;
       }
-    }
-
-    fetchMembers();
-  }, []);
+      return {
+        accounts,
+        members,
+      };
+    },
+    [],
+    {
+      initialData: {
+        accounts: [],
+        members: [],
+      },
+      onError: handleNetworkError,
+    },
+  );
 
   return (
     <List isLoading={isLoading}>
@@ -59,4 +60,4 @@ function Command() {
   );
 }
 
-export default Command;
+export default withCloudflareAccessToken(Command);

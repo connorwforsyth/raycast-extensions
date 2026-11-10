@@ -2,17 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Toast, getPreferenceValues, showToast } from "@raycast/api";
 
-import type { BookEntry, LibgenPreferences } from "@/types";
+import type { BookEntry, LibgenPreferences, SearchType } from "@/types";
 import { SearchPriority } from "@/types";
 import { getLibgenSearchResults } from "@/utils/api";
 import { sortBooksByPreferredFileFormats, sortBooksByPreferredLanguages } from "@/utils/books";
 import { isEmpty } from "@/utils/common";
+import { DEFAULT_MIRROR } from "@/utils/constants";
 
 import useFastestMirror from "./use-fastest-mirror";
 
-export const searchBooksOnLibgen = (searchContent: string) => {
+export const searchBooksOnLibgen = (searchContent: string, searchType: SearchType) => {
   const [books, setBooks] = useState<BookEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>();
   const { mirror } = useFastestMirror();
   const { searchPriority, preferredFormats, preferredLanguages, preferredLibgenMirror } = useMemo(
     () => getPreferenceValues<LibgenPreferences>(),
@@ -23,12 +25,13 @@ export const searchBooksOnLibgen = (searchContent: string) => {
     if (preferredLibgenMirror) {
       return preferredLibgenMirror;
     }
-    return mirror || "https://libgen.rs";
+    return mirror || DEFAULT_MIRROR.url;
   }, [mirror, preferredLibgenMirror]);
 
   const fetchData = useCallback(
     (signal: AbortSignal) => {
       setBooks([]);
+      setError(undefined);
 
       // not loading when search is empty
       if (isEmpty(searchContent) || !chosenMirror) {
@@ -37,8 +40,9 @@ export const searchBooksOnLibgen = (searchContent: string) => {
       }
       setLoading(true);
 
-      getLibgenSearchResults(searchContent.trim(), chosenMirror, signal)
+      getLibgenSearchResults(searchContent.trim(), chosenMirror, signal, searchType)
         .then((books) => {
+          if (signal.aborted) return;
           // sort books by search priority
           if (+searchPriority === SearchPriority.PreferredLanguages) {
             console.log("Sorting by preferred languages:", preferredLanguages);
@@ -54,12 +58,14 @@ export const searchBooksOnLibgen = (searchContent: string) => {
           setLoading(false);
         })
         .catch((error: Error) => {
+          if (signal.aborted) return;
           console.error(error);
+          setError(error.message);
           setLoading(false);
-          showToast(Toast.Style.Failure, String(error));
+          void showToast(Toast.Style.Failure, "Search Failed", error.message);
         });
     },
-    [searchContent, chosenMirror],
+    [searchContent, chosenMirror, searchType, searchPriority, preferredLanguages, preferredFormats],
   );
 
   useEffect(() => {
@@ -70,5 +76,5 @@ export const searchBooksOnLibgen = (searchContent: string) => {
     };
   }, [fetchData]);
 
-  return { books: books, loading: loading };
+  return { books, loading, error };
 };

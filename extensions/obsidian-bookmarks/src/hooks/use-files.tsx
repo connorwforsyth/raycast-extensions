@@ -1,29 +1,67 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import getObsidianFiles from "../helpers/get-obsidian-files";
 import { getLocalStorageFiles } from "../helpers/localstorage-files";
-import { File, unique } from "../types";
+import { File } from "../types";
 
-export type FilesHook = { loading: boolean; files: File[] };
+export type FilesHook = {
+  files: File[];
+  loading: boolean;
+  backgroundLoading: boolean;
+  updateFile: (file: File) => void;
+  deleteFile: (file: File) => void;
+};
+
 export default function useFiles(): FilesHook {
-  const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
-  const addFiles = useCallback(
-    (newFiles: File[]) => {
-      setFiles((orig) => {
-        const unsorted = unique([...orig, ...newFiles]);
-        const sorted = unsorted.sort((a, b) => a.attributes.title.localeCompare(b.attributes.title));
-        return sorted;
-      });
-    },
-    [setFiles]
-  );
+  const [loading, setLoading] = useState(true);
+  const [backgroundLoading, setBackgroundLoading] = useState(true);
+  const updatedPaths = useRef(new Set<string>());
+
+  const updateFile = useCallback((updated: File) => {
+    updatedPaths.current.add(updated.fullPath);
+    setFiles((current) => current.map((file) => (file.fullPath === updated.fullPath ? updated : file)));
+  }, []);
+
+  const deleteFile = useCallback((deleted: File) => {
+    updatedPaths.current.add(deleted.fullPath);
+    setFiles((current) => current.filter((file) => file.fullPath !== deleted.fullPath));
+  }, []);
 
   useEffect(() => {
-    const obsidian = getObsidianFiles().then((files) => addFiles(files));
-    const localStorage = getLocalStorageFiles().then((files) => addFiles(files));
+    async function loadFiles() {
+      try {
+        // Load initial files from localStorage
+        const localFiles = await getLocalStorageFiles();
+        setFiles(localFiles);
+        setLoading(false);
 
-    Promise.allSettled([obsidian, localStorage]).then(() => setLoading(false));
-  }, [addFiles, setLoading]);
+        // Process files and update as they complete
+        const scanned = await getObsidianFiles(localFiles, (file) => {
+          if (updatedPaths.current.has(file.fullPath)) return;
+          setFiles((current) =>
+            current.some((f) => f.fullPath === file.fullPath)
+              ? current.map((f) => (f.fullPath === file.fullPath ? file : f))
+              : [...current, file]
+          );
+        });
+        const paths = new Set(scanned.map((file) => file.fullPath));
+        setFiles((current) => current.filter((file) => paths.has(file.fullPath)));
+      } catch (error) {
+        console.error("Error loading files:", error);
+      } finally {
+        setLoading(false);
+        setBackgroundLoading(false);
+      }
+    }
 
-  return { files, loading };
+    loadFiles();
+  }, []);
+
+  return {
+    files,
+    loading,
+    backgroundLoading,
+    updateFile,
+    deleteFile,
+  };
 }

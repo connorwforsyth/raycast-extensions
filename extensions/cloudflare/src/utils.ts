@@ -1,4 +1,4 @@
-import { getPreferenceValues, Icon, showToast, Toast } from '@raycast/api';
+import { Icon, openExtensionPreferences } from '@raycast/api';
 import { AxiosError } from 'axios';
 import {
   DeploymentStatus,
@@ -7,23 +7,19 @@ import {
   Source,
   ZoneStatus,
 } from './service';
+import { showFailureToast } from '@raycast/utils';
 
 const CLOUDFLARE_BASE = 'https://dash.cloudflare.com';
-
-function getToken() {
-  const { token } = getPreferenceValues<ExtensionPreferences>();
-  return token;
-}
 
 function getSiteStatusIcon(status: ZoneStatus): Icon {
   switch (status) {
     case 'active':
-      return Icon.Checkmark;
+      return Icon.CheckCircle;
     case 'pending':
     case 'initializing':
       return Icon.Circle;
     case 'moved':
-      return Icon.ArrowRight;
+      return Icon.ArrowRightCircle;
     case 'deleted':
     case 'deactivated':
     case 'read only':
@@ -36,9 +32,11 @@ function getDeploymentStatusIcon(status: DeploymentStatus): Icon {
     case 'active':
       return Icon.Circle;
     case 'success':
-      return Icon.Checkmark;
+      return Icon.CheckCircle;
     case 'failure':
       return Icon.XMarkCircle;
+    case 'unknown':
+      return Icon.QuestionMarkCircle;
   }
 }
 
@@ -47,7 +45,7 @@ function getDomainStatusIcon(status: DomainStatus): Icon {
     case 'pending':
       return Icon.Circle;
     case 'active':
-      return Icon.Checkmark;
+      return Icon.CheckCircle;
   }
 }
 
@@ -56,7 +54,7 @@ function getMemberStatusIcon(status: MemberStatus): Icon {
     case 'pending':
       return Icon.Circle;
     case 'accepted':
-      return Icon.Checkmark;
+      return Icon.CheckCircle;
     case 'rejected':
       return Icon.XMarkCircle;
   }
@@ -68,6 +66,10 @@ function getSiteUrl(accountId: string, domain: string): string {
 
 function getPageUrl(accountId: string, pageName: string): string {
   return `${CLOUDFLARE_BASE}/${accountId}/pages/view/${pageName}`;
+}
+
+function getWorkerUrl(accountId: string, workerName: string): string {
+  return `${CLOUDFLARE_BASE}/${accountId}/workers/services/view/${workerName}/production`;
 }
 
 function getDeploymentUrl(
@@ -95,31 +97,55 @@ function toUrl(domain: string): string {
   return `https://${domain}`;
 }
 
-function handleNetworkError(e: unknown): void {
+async function handleNetworkError(e: unknown): Promise<void> {
   const error = e as AxiosError;
-  const status = error.response?.status;
-  if (!status) {
-    showToast(Toast.Style.Failure, 'Unknown error');
+
+  const response = error.response;
+  const toast = await showFailureToast('Please try again later.');
+  if (!response) {
+    toast.title = e instanceof Error ? e.message : 'Unknown error';
+    return;
   }
-  if (status === 400 || status === 403) {
-    showToast(
-      Toast.Style.Failure,
-      'Failed to authorize',
-      'Please make sure that your API token is valid.',
-    );
+
+  const status = response.status;
+  if (!status) {
+    toast.title = 'Network error';
+    return;
+  }
+
+  if (status === 401) {
+    toast.title = 'Failed to authorize';
+    toast.message = 'Reconnect Cloudflare or check your API token.';
+    toast.primaryAction = {
+      title: 'Open Extension Preferences',
+      onAction: openExtensionPreferences,
+    };
+  } else if (status === 403) {
+    toast.title = 'Permission required';
+    toast.message =
+      'Reconnect Cloudflare and grant the optional permission needed for this action.';
   } else {
-    showToast(Toast.Style.Failure, 'Network error', 'Please try again later.');
+    const data = response.data as {
+      errors?: Array<{ code: number; message: string }>;
+    };
+    const apiError = data.errors?.[0];
+    if (apiError) {
+      toast.title = `${apiError.code} error`;
+      toast.message = apiError.message;
+    } else {
+      toast.title = `Cloudflare request failed (${status})`;
+    }
   }
 }
 
 export {
-  getToken,
   getSiteStatusIcon,
   getDeploymentStatusIcon,
   getDomainStatusIcon,
   getMemberStatusIcon,
   getSiteUrl,
   getPageUrl,
+  getWorkerUrl,
   getDeploymentUrl,
   getRepoUrl,
   getCommitUrl,

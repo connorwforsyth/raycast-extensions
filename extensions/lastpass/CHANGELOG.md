@@ -1,5 +1,17 @@
 # LastPass Changelog
 
+## [Fix] - 2026-09-05
+
+- Stop passing the master password on the command line, so it no longer shows up in the process list
+- Stop writing the master password and the decrypted vault contents to the extension's console output
+- Pass `lpass` arguments as positional parameters instead of interpolating them into a shell string, fixing failures for passwords containing `` ` ``, `$`, `\`, or both quote characters
+- Drop the fixed `maxBuffer` limit, so arbitrarily large vaults are handled
+
+## [Fix] - 2024-08-01
+
+- Increase `maxBuffer` to be able to handle larger output
+- Add note about 2FA support to README
+
 ## [Fix] - 2023-11-06
 
 - Fixed a bug that caused the extension to crash

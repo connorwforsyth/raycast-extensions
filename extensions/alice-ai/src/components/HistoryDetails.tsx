@@ -1,8 +1,7 @@
 import { Action, ActionPanel, Color, Detail, Icon } from "@raycast/api";
-import { ChatCompletionMessageParam } from "openai/resources";
-import React, { useMemo, useState } from "react";
-import { useMetadata } from "../hooks";
-import { getModelName } from "../lib/OpenAI";
+import React, { useState } from "react";
+import { useCost } from "../hooks";
+import { ReasoningLevels, getModelName, getReasoningLevel, isReasoningModel, supportsTemperature } from "../lib/OpenAI";
 import { History } from "../types";
 
 interface Props {
@@ -12,24 +11,7 @@ interface Props {
 export default function HistoryDetails({ history }: Props) {
   const [displayPrompt, setDisplayPrompt] = useState<boolean>(false);
 
-  const chat = useMemo<ChatCompletionMessageParam[]>(() => {
-    return [
-      {
-        role: "system",
-        content: history.action.systemPrompt,
-      },
-      {
-        role: "user",
-        content: history.prompt,
-      },
-      {
-        role: "assistant",
-        content: history.result,
-      },
-    ];
-  }, [history]);
-
-  const metadata = useMetadata(chat, history.action.model);
+  const cost = useCost(history.action.model, history.tokens.input, history.tokens.output, history.timestamp);
 
   return (
     <Detail
@@ -40,17 +22,25 @@ export default function HistoryDetails({ history }: Props) {
           <Detail.Metadata.Label title="Action" text={history.action.name} />
           <Detail.Metadata.Label title="Timestamp" text={new Date(history.timestamp).toLocaleString()} />
           <Detail.Metadata.Label title="System Prompt" text={history.action.systemPrompt} />
-          <Detail.Metadata.Label title="Temperature" text={history.action.temperature.toString()} />
+          {isReasoningModel(history.action.model) && (
+            <Detail.Metadata.Label
+              title="Reasoning Level"
+              text={ReasoningLevels[getReasoningLevel(history.action.model, history.action.reasoningLevel)]}
+            />
+          )}
+          {supportsTemperature(history.action.model, history.action.reasoningLevel) && (
+            <Detail.Metadata.Label title="Temperature" text={history.action.temperature.toString()} />
+          )}
           <Detail.Metadata.Label title="Max Tokens" text={history.action.maxTokens.toString()} />
           <Detail.Metadata.Separator />
           <Detail.Metadata.TagList title="Model">
             <Detail.Metadata.TagList.Item text={getModelName(history.action.model)} color={Color.SecondaryText} />
           </Detail.Metadata.TagList>
-          <React.Fragment key={JSON.stringify(metadata)}>
-            <Detail.Metadata.Label title="Prompt Tokens" text={metadata.promptTokens.toString()} />
-            <Detail.Metadata.Label title="Result Tokens" text={metadata.resultTokens.toString()} />
-            <Detail.Metadata.Label title="Total Tokens" text={metadata.totalTokens.toString()} />
-            <Detail.Metadata.Label title="Cost" text={`$${metadata.cost.toFixed(6)}`} />
+          <React.Fragment>
+            <Detail.Metadata.Label title="Input Tokens" text={history.tokens.input.toString()} />
+            <Detail.Metadata.Label title="Output Tokens" text={history.tokens.output.toString()} />
+            <Detail.Metadata.Label title="Total Tokens" text={history.tokens.total.toString()} />
+            <Detail.Metadata.Label title="Cost" text={`$${cost.toFixed(6)}`} />
           </React.Fragment>
         </Detail.Metadata>
       }

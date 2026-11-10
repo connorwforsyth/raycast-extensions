@@ -2,10 +2,10 @@ import { ActionPanel, clearSearchBar, Icon, List } from "@raycast/api";
 import { v4 as uuidv4 } from "uuid";
 import { DestructiveAction, PrimaryAction, TextToSpeechAction } from "../actions";
 import { CopyActionSection } from "../actions/copy";
+import { EditModelAction } from "../actions/edit-model";
 import { FormInputActionSection } from "../actions/form-input";
 import { PreferencesActionSection } from "../actions/preferences";
 import { SaveActionSection } from "../actions/save";
-import { DEFAULT_MODEL } from "../hooks/useModel";
 import { Chat, ChatViewProps } from "../type";
 import { AnswerDetailView } from "./answer-detail";
 import { EmptyView } from "./empty";
@@ -21,13 +21,13 @@ export const ChatView = ({
   isAutoSaveConversation,
   onModelChange,
 }: ChatViewProps) => {
-  const sortedChats = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const sortedChats = [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const getActionPanel = (selectedChat: Chat) => (
     <ActionPanel>
       {question.length > 0 ? (
         <PrimaryAction title="Get Answer" onAction={() => use.chats.ask(question, [], conversation.model)} />
-      ) : selectedChat.answer && use.chats.selectedChatId === selectedChat.id ? (
+      ) : selectedChat.answer ? (
         <>
           <CopyActionSection answer={selectedChat.answer} question={selectedChat.question} />
           <SaveActionSection
@@ -36,8 +36,8 @@ export const ChatView = ({
               isAutoSaveConversation
                 ? undefined
                 : use.conversations.data.find((x) => x.id === conversation.id)
-                ? undefined
-                : () => use.conversations.add(conversation)
+                  ? undefined
+                  : () => use.conversations.add(conversation)
             }
           />
           <ActionPanel.Section title="Output">
@@ -47,7 +47,7 @@ export const ChatView = ({
       ) : null}
       <FormInputActionSection
         initialQuestion={question}
-        onSubmit={(question, files) => use.chats.ask(question, files, conversation.model)}
+        onSubmit={(question, files, model) => use.chats.ask(question, files, model ?? conversation.model)}
         models={models}
         selectedModel={selectedModel}
         onModelChange={onModelChange}
@@ -65,7 +65,7 @@ export const ChatView = ({
               setConversation({
                 id: uuidv4(),
                 chats: [],
-                model: DEFAULT_MODEL,
+                model: conversation.model,
                 pinned: false,
                 updated_at: "",
                 created_at: new Date().toISOString(),
@@ -78,6 +78,7 @@ export const ChatView = ({
           />
         </ActionPanel.Section>
       )}
+      <EditModelAction modelId={selectedModel} />
       <PreferencesActionSection />
     </ActionPanel>
   );

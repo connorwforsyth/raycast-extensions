@@ -12,11 +12,13 @@ export function useStreamJSON<T, U>(
     transform?: (item: any) => T;
     pageSize?: number;
     initialData?: U;
+    cacheWriteDebounce?: number;
     keepPreviousData?: boolean;
     execute?: boolean;
     onError?: (error: Error) => void;
     onData?: (data: T) => void;
     onWillExecute?: (args: [string, RequestInit]) => void;
+    failureToastOptions?: Partial<Pick<Toast.Options, "title" | "primaryAction" | "message">>;
   },
 ): AsyncState<Result<T>> & {
   revalidate: () => void;
@@ -37,6 +39,7 @@ With a few options:
 
 Including the [useCachedPromise](./useCachedPromise.md)'s options:
 
+- `options.cacheWriteDebounce` is the debounce time in milliseconds for writing results to the cache.
 - `options.keepPreviousData` is a boolean to tell the hook to keep the previous results instead of returning the initial value if there aren't any in the cache for the new arguments. This is particularly useful when used for data for a List to avoid flickering.
 
 Including the [useCachedState](./useCachedState.md)'s options:
@@ -48,7 +51,8 @@ Including the [usePromise](./usePromise.md)'s options:
 - `options.execute` is a boolean to indicate whether to actually execute the function or not. This is useful for cases where one of the function's arguments depends on something that might not be available right away (for example, depends on some user inputs). Because React requires every hook to be defined on the render, this flag enables you to define the hook right away but wait until you have all the arguments ready to execute the function.
 - `options.onError` is a function called when an execution fails. By default, it will log the error and show a generic failure toast with an action to retry.
 - `options.onData` is a function called when an execution succeeds.
-- `options.onWillExecute` is a function called when an execution will start..
+- `options.onWillExecute` is a function called when an execution will start.
+- `options.failureToastOptions` are the options to customize the title, message, and primary action of the failure toast.
 
 ### Return
 
@@ -69,7 +73,7 @@ import { useCallback, useState } from "react";
 
 type Formula = { name: string; desc?: string };
 
-export default function Main(): JSX.Element {
+export default function Main(): React.JSX.Element {
   const [searchText, setSearchText] = useState("");
 
   const formulaFilter = useCallback(
@@ -120,7 +124,7 @@ import { setTimeout } from "timers/promises";
 
 type Formula = { name: string; desc?: string };
 
-export default function Main(): JSX.Element {
+export default function Main(): React.JSX.Element {
   const [searchText, setSearchText] = useState("");
 
   const formulaFilter = useCallback(

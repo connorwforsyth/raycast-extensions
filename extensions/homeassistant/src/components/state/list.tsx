@@ -5,7 +5,7 @@ import { ClimateActionPanel } from "@components/climate/actions";
 import { CoverActionPanel } from "@components/cover/actions";
 import { EntityStandardActionSections } from "@components/entity";
 import { FanActionPanel } from "@components/fan/actions";
-import { useHAStates } from "@components/hooks";
+import { useVisibleHAStates } from "@components/hooks";
 import { InputBooleanActionPanel } from "@components/input_boolean/actions";
 import { InputButtonActionPanel } from "@components/input_button/actions";
 import { InputDateTimeActionPanel } from "@components/input_datetime/actions";
@@ -24,18 +24,33 @@ import { UpdateActionPanel } from "@components/update/actions";
 import { VacuumActionPanel } from "@components/vacuum/actions";
 import { WeatherActionPanel } from "@components/weather/actions";
 import { ZoneActionPanel } from "@components/zone/actions";
+import { filterHiddenEntities, partitionFavoriteStates, useEntityOverrides } from "@lib/entity-overrides";
 import { ha, shouldDisplayEntityID } from "@lib/common";
 import { State } from "@lib/haapi";
-import { getStateTooltip } from "@lib/utils";
-import { ActionPanel, Image, List, Toast, showToast } from "@raycast/api";
-import { useState } from "react";
+import { getDisplayName, getStateTooltip } from "@lib/utils";
+import { ActionPanel, Color, Icon, Image, List, Toast, showToast } from "@raycast/api";
+import React, { useMemo, useState } from "react";
 import { useStateSearch } from "./hooks";
 import { getIcon, getStateValue } from "./utils";
 
-export function StatesList(props: { domain: string; deviceClass?: string | undefined }): JSX.Element {
-  const [searchText, setSearchText] = useState<string>();
-  const { states: allStates, error, isLoading } = useHAStates();
-  const { states } = useStateSearch(searchText, props.domain, props.deviceClass, allStates);
+export function StatesList(props: {
+  domain: string;
+  deviceClass?: string | undefined;
+  entitiesState?: State[] | undefined;
+  initialSearchText?: string | undefined;
+}): React.ReactElement {
+  const [searchText, setSearchText] = useState<string | undefined>(props.initialSearchText);
+  const { states: allStates, error, isLoading } = useVisibleHAStates();
+  const { entityAliases, hiddenEntityIds, favoriteEntityIds } = useEntityOverrides();
+  const sourceStates = useMemo(() => {
+    const raw = props.entitiesState ?? allStates;
+    return filterHiddenEntities(raw, hiddenEntityIds) ?? raw;
+  }, [props.entitiesState, allStates, hiddenEntityIds]);
+  const { states } = useStateSearch(searchText, props.domain, props.deviceClass, sourceStates, entityAliases);
+  const statesById = useMemo(
+    () => new Map((sourceStates ?? []).map((state) => [state.entity_id, state])),
+    [sourceStates],
+  );
 
   if (error) {
     showToast({
@@ -49,35 +64,43 @@ export function StatesList(props: { domain: string; deviceClass?: string | undef
     return <List isLoading={true} searchBarPlaceholder="Loading" />;
   }
 
+  const sortByDisplayName = (items: State[]) =>
+    [...items].sort((a, b) =>
+      getDisplayName(a, entityAliases[a.entity_id]).localeCompare(getDisplayName(b, entityAliases[b.entity_id])),
+    );
+  const { favorites, others } = partitionFavoriteStates(states, favoriteEntityIds);
+  const favoriteStates = sortByDisplayName(favorites);
+  const otherStates = sortByDisplayName(others);
+
   return (
-    <List searchBarPlaceholder="Filter by name or ID..." isLoading={isLoading} onSearchTextChange={setSearchText}>
-      {states
-        ?.sort((a, b) =>
-          (a.attributes.friendly_name || a.entity_id).localeCompare(b.attributes.friendly_name || b.entity_id),
-        )
-        .map((state) => <StateListItem key={state.entity_id} state={state} />)}
+    <List
+      searchBarPlaceholder="Filter by name or ID..."
+      isLoading={isLoading}
+      searchText={searchText}
+      onSearchTextChange={setSearchText}
+    >
+      {favoriteStates.length > 0 && (
+        <List.Section title="Favorites" subtitle={`${favoriteStates.length}`}>
+          {favoriteStates.map((state) => (
+            <StateListItem key={state.entity_id} state={state} statesById={statesById} />
+          ))}
+        </List.Section>
+      )}
+      <List.Section title={favoriteStates.length > 0 ? "Entities" : undefined} subtitle={`${otherStates.length}`}>
+        {otherStates.map((state) => (
+          <StateListItem key={state.entity_id} state={state} statesById={statesById} />
+        ))}
+      </List.Section>
     </List>
   );
 }
 
-export function StateListItem(props: { state: State }): JSX.Element {
+export function StateListItem(props: { state: State; statesById?: ReadonlyMap<string, State> }): React.ReactElement {
   const state = props.state;
-  const extraTitle = (state: State): string => {
-    try {
-      const e = state.entity_id;
-      if (e.startsWith("cover") && "current_position" in state.attributes) {
-        const p = state.attributes.current_position;
-        if (p > 0 && p < 100) {
-          return `${p}% | `;
-        }
-      } else if (e.startsWith("climate") && "current_temperature" in state.attributes) {
-        return `${state.attributes.current_temperature} | `;
-      }
-    } catch (e) {
-      // ignore
-    }
-    return "";
-  };
+  const { getAlias, isFavorite } = useEntityOverrides();
+  const displayName = getDisplayName(state, getAlias(state.entity_id));
+  const favorite = isFavorite(state.entity_id);
+  const areaName = state.area_name;
 
   let icon: Image.ImageLike | undefined;
   const subtitle = (state: State): string | undefined => {
@@ -99,25 +122,76 @@ export function StateListItem(props: { state: State }): JSX.Element {
         icon = ha.urlJoin(ep);
       }
     }
-    if (shouldDisplayEntityID()) {
-      return extra;
+    if (!shouldDisplayEntityID()) {
+      const parts = [areaName, extra].filter(Boolean);
+      return parts.length > 0 ? parts.join(" | ") : undefined;
     }
-    if (extra) {
-      return `${state.entity_id} | ${extra}`;
+    const parts = [state.entity_id, areaName, extra].filter(Boolean);
+    return parts.length > 0 ? parts.join(" | ") : undefined;
+  };
+
+  const firstAccessoryTitle = (state: State): string => {
+    try {
+      const e = state.entity_id;
+      if (e.startsWith("cover") && "current_position" in state.attributes) {
+        const p = state.attributes.current_position;
+        return `${p}%`;
+      } else if (e.startsWith("climate") && "current_temperature" in state.attributes) {
+        return `${state.attributes.current_temperature}°`;
+      }
+    } catch {
+      // ignore
     }
-    return state.entity_id;
+    return "";
+  };
+
+  const firstAccessoryIcon = (state: State): Image.ImageLike | undefined => {
+    try {
+      const e = state.entity_id;
+      if (e.startsWith("cover") && "current_position" in state.attributes) {
+        return { source: "window-open.svg", tintColor: Color.SecondaryText };
+      } else if (e.startsWith("climate") && "current_temperature" in state.attributes) {
+        return { source: "thermometer.svg", tintColor: Color.SecondaryText };
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const secondAccessoryIcon = (state: State): Image.ImageLike | undefined => {
+    try {
+      if (state.attributes.hvac_modes) {
+        return { source: "cog.svg", tintColor: Color.SecondaryText };
+      }
+    } catch {
+      // ignore
+    }
   };
 
   return (
     <List.Item
       key={state.entity_id}
-      title={state.attributes.friendly_name || state.entity_id}
+      title={displayName}
       subtitle={subtitle(state)}
       actions={<StateActionPanel state={state} />}
       icon={icon || getIcon(state)}
       accessories={[
+        ...(favorite
+          ? [
+              {
+                icon: { source: Icon.Star, tintColor: Color.Yellow },
+                tooltip: "Favorite",
+              },
+            ]
+          : []),
         {
-          text: extraTitle(state) + getStateValue(state),
+          text: firstAccessoryTitle(state),
+          icon: firstAccessoryIcon(state),
+          tooltip: getStateTooltip(state),
+        },
+        {
+          text: getStateValue(state, props.statesById),
+          icon: secondAccessoryIcon(state),
           tooltip: getStateTooltip(state),
         },
       ]}
@@ -125,7 +199,7 @@ export function StateListItem(props: { state: State }): JSX.Element {
   );
 }
 
-export function StateActionPanel(props: { state: State }): JSX.Element {
+export function StateActionPanel(props: { state: State }): React.ReactElement {
   const state = props.state;
   const domain = props.state.entity_id.split(".")[0];
 

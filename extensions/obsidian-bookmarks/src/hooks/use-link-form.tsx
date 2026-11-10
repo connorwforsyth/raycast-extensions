@@ -7,6 +7,7 @@ export interface LinkFormState {
   values: {
     title: string;
     url: string;
+    favicon: string;
     tags: string[];
     description: string;
   };
@@ -25,7 +26,9 @@ function isEqual<T>(before: T, after: T) {
 type FormField = keyof LinkFormState["values"];
 type LinkFormAction<Field extends FormField> =
   | { type: "changeField"; field: Field; value: LinkFormState["values"][Field] }
-  | { type: "updateWithLink"; link: Link | null };
+  | { type: "updateWithLink"; link: Link | null }
+  | { type: "setValues"; values: LinkFormState["values"] };
+
 function reducer<Field extends FormField>(state: LinkFormState, action: LinkFormAction<Field>): LinkFormState {
   switch (action.type) {
     case "changeField": {
@@ -50,15 +53,30 @@ function reducer<Field extends FormField>(state: LinkFormState, action: LinkForm
         },
       };
     }
+    case "setValues": {
+      return {
+        ...state,
+        dirty: true,
+        values: action.values,
+      };
+    }
   }
 }
 
-export default function useLinkForm(initialValues: Partial<LinkFormState["values"]> = {}) {
+export type LinkFormOptions = {
+  detectFrontmostLink?: boolean;
+};
+
+export default function useLinkForm(
+  initialValues: Partial<LinkFormState["values"]> = {},
+  { detectFrontmostLink = true }: LinkFormOptions = {}
+) {
   const initialState: LinkFormState = {
     dirty: false,
-    hasUpdatedWithLink: false,
+    hasUpdatedWithLink: !detectFrontmostLink,
     values: {
       description: "",
+      favicon: "",
       tags: [],
       title: "",
       url: "",
@@ -77,10 +95,11 @@ export default function useLinkForm(initialValues: Partial<LinkFormState["values
   return {
     loading: linkLoading,
     values: state.values,
+    setValues: (values: LinkFormState["values"]) => dispatch({ type: "setValues", values }),
     onChange:
       <Field extends FormField>(field: Field) =>
       (value: LinkFormState["values"][Field]) => {
-        dispatch({ type: "changeField", field, value: value });
+        dispatch({ type: "changeField", field, value });
       },
   };
 }

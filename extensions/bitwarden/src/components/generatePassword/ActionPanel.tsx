@@ -1,7 +1,5 @@
 import { Action, ActionPanel, Clipboard, Icon, LocalStorage } from "@raycast/api";
-import BugReportCollectDataAction from "~/components/actions/BugReportCollectDataAction";
-import BugReportOpenAction from "~/components/actions/BugReportOpenAction";
-import CopyRuntimeErrorLog from "~/components/actions/CopyRuntimeErrorLog";
+import { DebuggingBugReportingActionSection } from "~/components/actions";
 import { LOCAL_STORAGE_KEY } from "~/constants/general";
 import { showCopySuccessMessage } from "~/utils/clipboard";
 import { getTransientCopyPreference } from "~/utils/preferences";
@@ -15,7 +13,7 @@ const GeneratePasswordActionPanel = (props: GeneratePasswordActionPanelProps) =>
   const { password, regeneratePassword } = props;
 
   const handleCopy = (password: string) => async () => {
-    await Clipboard.copy(password, { transient: getTransientCopyPreference("password") });
+    await Clipboard.copy(password, { concealed: getTransientCopyPreference("password") });
     await showCopySuccessMessage("Copied password to clipboard");
   };
 
@@ -27,27 +25,32 @@ const GeneratePasswordActionPanel = (props: GeneratePasswordActionPanelProps) =>
             title="Copy Password"
             icon={Icon.Clipboard}
             onAction={handleCopy(password)}
-            shortcut={{ key: "enter", modifiers: ["cmd"] }}
+            shortcut={{ macOS: { key: "enter", modifiers: ["opt"] }, Windows: { key: "enter", modifiers: ["alt"] } }}
           />
           <Action.Paste
             title="Paste Password to Active App"
             icon={Icon.Text}
             content={password}
-            shortcut={{ key: "enter", modifiers: ["cmd", "shift"] }}
+            shortcut={{
+              key: "enter",
+              macOS: { key: "enter", modifiers: ["opt", "shift"] },
+              Windows: { key: "enter", modifiers: ["alt", "shift"] },
+            }}
           />
         </>
       )}
       <Action
         title="Regenerate Password"
         icon={Icon.ArrowClockwise}
-        onAction={regeneratePassword}
-        shortcut={{ key: "backspace", modifiers: ["cmd"] }}
+        shortcut={{
+          macOS: { key: "backspace", modifiers: ["opt"] },
+          Windows: { key: "backspace", modifiers: ["alt"] },
+        }}
+        /* avoid passing a reference to onAction because, for some reason, a string
+        is passed to it, even though the type says otherwise 🤔 */
+        onAction={() => regeneratePassword()}
       />
-      <ActionPanel.Section title="Debugging & Bug Reporting">
-        <CopyRuntimeErrorLog />
-        <BugReportOpenAction />
-        <BugReportCollectDataAction />
-      </ActionPanel.Section>
+      <DebuggingBugReportingActionSection />
       {process.env.NODE_ENV === "development" && (
         <Action title="Clear storage" icon={Icon.Trash} onAction={clearStorage} />
       )}

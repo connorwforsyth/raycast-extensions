@@ -59,7 +59,7 @@ Pastes text or a file to the current selection of the frontmost application.
 #### Signature
 
 ```typescript
-async function paste(content: string | Content): Promise<void>;
+async function paste(content: string | number | Content, options?: PasteOptions): Promise<void>;
 ```
 
 #### Example
@@ -177,6 +177,10 @@ type Content =
     }
   | {
       file: PathLike;
+    }
+  | {
+      html: string;
+      text?: string; // The alternative text representation of the content.
     };
 ```
 
@@ -204,3 +208,11 @@ Type of options passed to `Clipboard.copy`.
 #### Properties
 
 <InterfaceTableFromJSDoc name="Clipboard.CopyOptions" />
+
+### Clipboard.PasteOptions
+
+Type of options passed to `Clipboard.paste`.
+
+#### Properties
+
+<InterfaceTableFromJSDoc name="Clipboard.PasteOptions" />

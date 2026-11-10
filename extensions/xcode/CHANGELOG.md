@@ -1,5 +1,60 @@
 # Xcode Changelog
 
+## [Easier Project Identification] - 2026-11-04
+
+- Remove the project file name from the path shown in Search Recent Projects.
+- Add a preference to show a colored directory tag instead of the path, with the full path as a tooltip. The tag shows the git root directory, or the parent directory for projects outside git, next to an icon for the directory type. This makes it easier to tell git worktrees apart.
+- Show workspaces embedded in a project or playground as that project or playground, instead of as a separate entry named "project" or "playground".
+
+## [Improve Xcode project discovery] - 2026-10-29
+
+- Include Xcode projects in hidden git worktrees
+
+## [Respect the Default Simulator Viewer] - 2026-10-10
+
+- Open simulators using the system's default `devices://` handler, with a fallback to Apple's Device Hub or Simulator.
+- Show the selected simulator when launching an app even if the simulator is already booted.
+
+## [Simulator Appearance & Device Hub Support] - 2026-09-24
+
+- Added "Toggle Dark/Light Mode" action for booted simulators (⌘D).
+- Updated `launchSimulatorApplication` to open Device Hub on Xcode 27+, falling back to Simulator.app.
+- Added "Booted" section at the top of the simulator list for quick access to running simulators.
+- Added "Recently Used" section showing the 5 most recently booted simulators, sorted by last usage.
+- Sort simulator groups by newest runtime first (e.g. iOS 27 before iOS 26).
+
+## [Xcode 26 Assets] - 2025-09-15
+
+- Updated assets to match Xcode 26 
+
+## [AI Tools & Improved Search Recent Projects] - 2025-06-16
+
+- Added AI tools to search for your recent Xcode projects, Swift packages, boot and shutdown simulators, and more.
+- Improved the "Search Recent Projects" command to sort the most recent projects by their last usage.
+- Added an option to select the Swift version when creating a playground.
+- Removed the "Search Apple Developer Documentation" command due to the unavailability of the underlying API.
+- Added "Open With Terminal" action to the "Search Recent Projects" command.
+- Added "Create Quicklink" action to the "Search Recent Projects" command.
+- Added "Delete" action to the "Manage Simulators" command.
+- Updated Raycast Store screenshots.
+
+## [Fix open URL] - 2025-04-25
+
+- Fix the open URL in Simulator command to support URLs with query parameters.
+
+## [Add Xcode Runtimes Management] - 2025-04-15
+
+- Add Xcode runtimes listing and management command
+- Add a delete unsupported Xcode runtimes command
+
+## [Added Delete App Data] - 2024-09-30
+
+- Added delete app data command to remove the data of an app installed on a simulator without uninstalling.
+
+## [Search Recent Projects Improvements] - 2024-09-20
+
+- Improved the "Search Recent Projects" command to remember the last filter option
+
 ## [Clear SwiftUI Previews Cache] - 2024-04-03
 
 - Added "Clear SwiftUI Previews Cache" command to remove the ~/Library/Developer/Xcode/UserData/Previews directory
@@ -21,7 +76,7 @@
 - Added Push Notifications using a payload
 - Added iCloud Sync
 - Added Open AppGroup directory
-  
+
 ## [Updated Swift Package Types] - 2023-10-03
 
 - Updated Swift Package types when creating a new Swift Package.

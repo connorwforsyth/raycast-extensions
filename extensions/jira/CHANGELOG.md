@@ -1,6 +1,143 @@
 # Jira Changelog
 
-## [Fix] 2024-06-17
+## [Jira reliability fixes] - 2026-11-05
+
+- Load all accessible projects and saved filters, including when Jira returns smaller pages.
+- Keep the Active Sprints project selector available when a search finds no projects.
+- Avoid empty issue searches before a saved filter is selected.
+- Honor the configured Jira site during OAuth sign-in and keep cached issues, teams, and project/filter selections separate by site and account.
+- Route Jira avatar and autocomplete URLs through the selected OAuth site. Send credentials only to trusted Jira destinations.
+- Limit concurrent issue icon downloads and retained icons to reduce request and memory pressure.
+- Trust system certificate authorities for company HTTPS inspection on supported runtimes.
+
+## [Bug Triage Skill] - 2026-09-24
+
+- Update to Raycast API 2.5.0 for public bundled-skill support.
+- Add a skill for comparing bug reports with existing issues, identifying possible duplicates, and creating or updating issues with the available tools.
+
+## [Search input available immediately] - 2026-09-20
+
+- Fixed commands blocking keyboard input on launch: the Jira site and user details are now cached, so the view renders right away while authentication requests run in the background
+- Fixed view commands being wrapped in an async component, which React doesn't support and could cause a render loop
+- Stopped fetching child issues for every list item (one request per row), which kept the extension busy and made typing lag while a list loaded
+- Fetch each issue type icon only once instead of once per issue
+
+## [Fixed team field on issue creation] - 2026-08-25
+
+- Fixed the Team field showing up under "Unknown fields" (and not rendering as a dropdown) on the create-issue form for sites using the newer Atlassian Teams field (`atlassian-team`), so a team can now be selected and set on new issues
+- Added support for both Team field types: the Atlassian Teams platform field (`atlassian-team`) and the Advanced Roadmaps Team field (`rm-teams-custom-field-team`), both sent as a plain-string Team ID (an `{ id }` object is silently dropped)
+- Added unit tests for custom field value handling (run with `npm test` via Node's built-in `node:test` runner)
+
+## [Fix Jira HTML response errors] - 2026-06-29
+
+- Fixed Jira requests crashing with `Unexpected token '<'` when Jira returns an HTML login, redirect, or SSO page instead of JSON (#23569, #23474, #23413, #23367).
+- Show clearer Jira authentication/API errors instead of raw JSON parsing stack traces.
+
+## [Bug Fix] - 2026-05-18
+
+- Kept Jira issue lists open when Jira returns an HTML error page while loading issue type icons.
+
+## [Bug Fix] - 2026-05-18
+
+- Fixed issue details failing to load when descriptions include absolute Jira attachment image URLs
+
+## [Bug Fix] - 2026-05-18
+
+- Loaded all saved filters in the My Filters command instead of stopping after the first 100 results
+
+## [Open Issues sprint/backlog split config] - 2026-04-16
+
+- Added new `Open Issues` checkboxes to choose which sections to show: `Active Sprint`, `All Sprints`, and `Backlog`.
+- Updated the `All Sprints` view in `Open Issues` to split issues by sprint name instead of showing a single combined section.
+- Kept original `Open Issues` behavior as the implicit default when no section checkbox is enabled.
+- Removed the separate `Open Issues in Active Sprint` command since equivalent behavior is now configurable in `Open Issues`.
+- Included project dropdown filtering with persisted selection to match the existing active sprint workflow.
+- Added a friendlier fallback error for Jira OAuth `invalid_grant` failures, prompting users to reconnect Jira in extension preferences.
+- Improved extension and `Open Issues` preference descriptions for clearer in-app configuration guidance.
+
+## [Security Fix] - 2026-03-17
+
+- Bump lodash/lodash-es to fix prototype pollution vulnerability (CVE-2025-13465)
+
+## [Bug Fix] - 2026-02-05
+
+- Fixed a bug where the Jira create-issue flow copied an API base URL instead of the normal `/browse/KEY` issue link.
+
+## [Update] - 2025-12-07
+
+- Add MacOS and Windows to supported platforms
+- Update dependencies and improve error handling
+
+## [Fix unbounded JQL error when no project filter] - 2025-09-08
+
+- Added a fallback `created >= -30d` clause in the _Search Issues_ command when no project is selected to prevent Jira’s “Unbounded JQL queries are not allowed” error.
+
+## [Fix deprecated Jira search API] - 2025-08-20
+
+- Replaced removed `/search` endpoint with the new enhanced search-based API (`POST /search/jql`).
+- Added response-shape compatibility for `searchResults` / `values`.
+- Updated `src/api/issues.ts` and related hooks to prevent runtime errors after Atlassian CHANGE-2046.
+
+## [Update Markdown library] - 2025-06-25
+
+- Migrated to a new Markdown to ADF library as the old one was no longer being maintained.
+
+## [AI Extension Fix] - 2025-02-27
+
+- Reduced the numbers of issues being passed to the AI during search to avoid bloating it.
+
+## [✨ AI Enhancements] - 2025-02-21
+
+## [Avatars now display with a circular mask] - 2025-02-10
+
+- To be consistent with avatars with initials, the profile pictures now show with a circular mask.
+
+## [Fix Git branch name format] - 2025-02-10
+
+- Fixed an issue where the Git branch name format, specifically the issue summary, was not slugified.
+
+## [Add ability to configuring Git branch name format] - 2025-01-09
+
+- Implemented the ability to configure the Git branch name format in the extension settings.
+
+## [Add ability to open issues in other application defined in extension preferences] - 2024-12-25
+
+- Implemented the ability to open by default in any other application (e.g. other browser) any issue.
+
+## [Add ability to copy newly created issue url to clipboard as an optional config] - 2024-12-12
+
+- If you want to copy the newly created issue URL to the clipboard, you can now enable this feature in the extension settings.
+
+## [Added Parent Issue support] - 2024-12-02
+
+- Implemented the ability to open the parent issue from a child issue.
+
+## [Added Child Issues support] - 2024-11-15
+
+- Implemented the ability to view and manage child-related issues within the issue detail view, as well as a new component that provides a comprehensive list of all current issue child issues.
+- Resolved an issue where the child’s status updates were not reflected in the user interface upon changing their status.
+
+## [Fix number search to include issue keys for all projects.] - 2024-09-30
+
+- When a user searches for a number without a project selected, the extension matches the number against issue keys in all projects.
+
+## [Add ability to copy issue as formatted markdown link] - 2024-09-29
+
+- Copies current issue as a formatted markdown link in the format: `[issue.key - issue.fields.summary]`
+
+## [Persist My Filters value when closing command] - 2024-09-14
+
+- Persist My Filters value when closing command allowing the command to fetch the issues for the latest selected filter when opening the command anew.
+
+## [Fix epic autocomplete to include all epics of a selected project.] - 2024-08-14
+
+- When a user searches for an epic, the extension prioritizes retrieving search results from Current Search over History Search
+
+## [Log out the user if re-authentication fails] - 2024-07-11
+
+- Automatically log out users if re-authentication fails, instead of displaying an error message.
+
+## [Fix URL port issue] 2024-06-17
 
 - Fixed an issue where adding a port to the URL was not possible
 

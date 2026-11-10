@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="./assets/directadmin-reseller.png" width="200" height="200" />
+    <img src="./assets/directadmin-reseller@dark.png" width="200" height="200" />
 </p>
 
 # DirectAdmin [Reseller] Raycast Extension
@@ -23,6 +23,10 @@ This is a Raycast extension for [DirectAdmin](https://www.directadmin.com/) Rese
 - This extension is for ****Reseller**** level accounts but you can also manage your own "user" level account (i.e. a ****User****) through the `My Domains` and `My Databases` commands - the other commands will not work as you need to be a **Reseller**.
 
 - On a Technical Note, some "user" commands have dedicated DirectAdmin endpoints but for those which do not, a **Reseller** can `impersonate` a user through the API.
+
+## 🧪 Manage Panels (Experimental)
+
+There is a new command (disabled by default) that allows you to manage multiple panels using the extension. `Enable` if interested. `WIP`
 
 ## 🔧 Commands
 
@@ -111,3 +115,10 @@ This extension provides the following commands:
 * CMD_API_ACCOUNT_USER - create a new user account without the need for a user package (as of `Initial Version`, a package must be specified)
 
 </details>
+
+---
+
+### 👀 Looking for a different panel? Try these:
+
+<a title="Install cpanel Raycast Extension" href="https://www.raycast.com/xmok/cpanel"><img src="https://www.raycast.com/xmok/cpanel/install_button@2x.png?v=1.1" height="64" alt="" style="height: 64px;"></a>
+<a title="Install hestiacp-admin Raycast Extension" href="https://www.raycast.com/xmok/hestiacp-admin"><img src="https://www.raycast.com/xmok/hestiacp-admin/install_button@2x.png?v=1.1" height="64" alt="" style="height: 64px;"></a>

@@ -1,0 +1,163 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "anki",
+  "title": "Anki",
+  "description": "Anki extension for Raycast",
+  "icon": "extension-icon.png",
+  "categories": [
+    "Productivity",
+    "Applications",
+    "Other"
+  ],
+  "keywords": [
+    "memory",
+    "flashcards",
+    "study"
+  ],
+  "author": "anton-suprun",
+  "preferences": [
+    {
+      "name": "port",
+      "type": "textfield",
+      "required": false,
+      "title": "anki-connect port",
+      "description": "Port that anki-connect uses. (Default: 8765)"
+    },
+    {
+      "name": "allow_dup_cards",
+      "type": "checkbox",
+      "label": "Allow Duplicate Cards",
+      "required": false,
+      "description": "If selected, duplicate cards can be created"
+    },
+    {
+      "name": "dup_scope",
+      "type": "dropdown",
+      "title": "Duplicate Scope",
+      "data": [
+        {
+          "title": "Deck",
+          "value": "deck"
+        },
+        {
+          "title": "Entire Collection",
+          "value": "collection"
+        }
+      ],
+      "default": "deck",
+      "required": false,
+      "description": "Can be used to specify the scope for which duplicates are checked"
+    }
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "decks",
+      "title": "Decks",
+      "subtitle": "Anki",
+      "description": "Lists all Anki decks",
+      "mode": "view"
+    },
+    {
+      "name": "browseCards",
+      "title": "Browse Cards",
+      "subtitle": "Anki",
+      "description": "Browse all cards in Anki",
+      "mode": "view"
+    },
+    {
+      "name": "addCard",
+      "title": "Add Card",
+      "subtitle": "Anki",
+      "description": "Add a card to a deck in Anki",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "allow_empty_card_fields",
+          "type": "checkbox",
+          "label": "Allow Empty First Field",
+          "required": false,
+          "description": "Skip the local first-field check in Add Card. Other fields are optional. Anki may still reject an empty note."
+        }
+      ]
+    },
+    {
+      "name": "viewStats",
+      "title": "View Stats",
+      "subtitle": "Anki",
+      "description": "View Anki collection statistics",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.6.3",
+    "@raycast/utils": "^2.3.2",
+    "axios": "^1.20.0",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "@types/turndown": "^5.0.6",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "test:live": "node scripts/verify-live.cjs"
+  },
+  "platforms": [
+    "macOS"
+  ],
+  "contributors": [
+    "0xdhrv"
+  ],
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "tools": [
+    {
+      "name": "list-decks",
+      "title": "List Decks",
+      "description": "List Anki decks and card counts."
+    },
+    {
+      "name": "list-note-types",
+      "title": "List Note Types",
+      "description": "List existing Anki note types and their ordered fields, including custom types."
+    },
+    {
+      "name": "search-notes",
+      "title": "Search Notes",
+      "description": "Search Anki notes using Anki query syntax, with bounded pages."
+    },
+    {
+      "name": "get-note",
+      "title": "Get Note",
+      "description": "Get a note's current fields and tags by note ID."
+    },
+    {
+      "name": "create-note",
+      "title": "Create Note",
+      "description": "Create an Anki note using an existing deck and note type. Supports custom fields and tags."
+    },
+    {
+      "name": "update-note",
+      "title": "Update Note",
+      "description": "Update specific fields or replace tags on an existing Anki note. Other fields stay unchanged."
+    },
+    {
+      "name": "create-deck",
+      "title": "Create Deck",
+      "description": "Create an Anki deck or return an existing deck with the same name."
+    }
+  ]
+}

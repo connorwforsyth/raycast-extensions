@@ -68,7 +68,7 @@ export function XcodeSimulatorListItem(props: { simulator: XcodeSimulator; reval
                     `${props.simulator.name} restarted`,
                     `Failed to restart ${props.simulator.name}`,
                     async () => {
-                      await XcodeSimulatorService.restart(props.simulator);
+                      await XcodeSimulatorService.restart(props.simulator.udid);
                       props.revalidate();
                     }
                   );
@@ -79,7 +79,7 @@ export function XcodeSimulatorListItem(props: { simulator: XcodeSimulator; reval
                 icon={Icon.Link}
                 title="Open URL"
                 target={<XcodeSimulatorOpenUrlForm simulator={props.simulator} />}
-                shortcut={{ modifiers: ["cmd"], key: "o" }}
+                shortcut={Keyboard.Shortcut.Common.Open}
               />
               <Action.Push
                 icon={Icon.AlarmRinging}
@@ -100,6 +100,23 @@ export function XcodeSimulatorListItem(props: { simulator: XcodeSimulator; reval
                   )
                 }
               />
+              <Action
+                icon={Icon.Moon}
+                title="Toggle Dark/Light Mode"
+                shortcut={{ modifiers: ["cmd"], key: "d" }}
+                onAction={() =>
+                  operationWithUserFeedback(
+                    "Please wait",
+                    `Appearance switched on ${props.simulator.name}`,
+                    `Failed to switch appearance on ${props.simulator.name}`,
+                    () => XcodeSimulatorService.toggleAppearance(props.simulator)
+                  ).then(({ isSuccess, result, toast }) => {
+                    if (isSuccess && result) {
+                      toast.title = `Switched to ${result} mode on ${props.simulator.name}`;
+                    }
+                  })
+                }
+              />
             </>
           )}
           <Action.Push
@@ -107,6 +124,24 @@ export function XcodeSimulatorListItem(props: { simulator: XcodeSimulator; reval
             title="Rename"
             shortcut={Keyboard.Shortcut.Common.Edit}
             target={<XcodeSimulatorRenameForm simulator={props.simulator} onRename={props.revalidate} />}
+          />
+          <Action
+            icon={Icon.Trash}
+            style={Action.Style.Destructive}
+            title="Delete"
+            shortcut={Keyboard.Shortcut.Common.Remove}
+            onAction={() => {
+              operationWithUserFeedback(
+                "Please wait",
+                `${props.simulator.name} deleted`,
+                `Failed to delete ${props.simulator.name}`,
+                async () => {
+                  await XcodeSimulatorService.delete(props.simulator);
+                  props.revalidate();
+                }
+              );
+              props.revalidate();
+            }}
           />
         </ActionPanel>
       }

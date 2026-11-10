@@ -38,12 +38,15 @@ export const runCommandSync = (command: string) => {
  * @returns A promise resolving to the output of the command as a string.
  */
 export const runCommandInTerminal = async (command: string): Promise<string> => {
-  const output = await runAppleScript(`tell application "Terminal"
+  const output = await runAppleScript(
+    `tell application "Terminal"
     try
       activate
       do script "${command.replaceAll('"', '\\"')}"
     end try
-  end tell`);
+  end tell`,
+    { timeout: 0 },
+  );
   return output;
 };
 
@@ -55,6 +58,24 @@ export const runCommandInTerminal = async (command: string): Promise<string> => 
  */
 export const cutoff = (str: string, cutoff: number) => {
   return `${str.substring(0, cutoff)}${str.length > cutoff ? "..." : ""}`;
+};
+
+/**
+ * Checks whether a string starts with a valid URL scheme.
+ * @param value The string to check.
+ * @returns Whether the string starts with a URL scheme.
+ */
+export const hasURLScheme = (value: string) => {
+  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+};
+
+/**
+ * Encodes a URI without double-encoding valid percent-encoded octets.
+ * @param value The URI to encode.
+ * @returns The encoded URI.
+ */
+export const encodeURIOnce = (value: string) => {
+  return encodeURI(value).replace(/%25([\da-fA-F]{2})/g, "%$1");
 };
 
 /**

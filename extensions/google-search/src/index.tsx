@@ -1,12 +1,19 @@
-import { ActionPanel, closeMainWindow, Action, Icon, List, open } from "@raycast/api";
+import { ActionPanel, closeMainWindow, Action, Icon, Keyboard, LaunchProps, List, open } from "@raycast/api";
 import { getIcon } from "./utils/resultUtils";
 import { useSearch } from "./utils/useSearch";
 
-export default function Command() {
-  const { isLoading, results, search, addHistory, deleteAllHistory, deleteHistoryItem } = useSearch();
+export default function Command(props: LaunchProps<{ arguments: Arguments.Index }>) {
+  const initialQuery = props.arguments.query || props.fallbackText || "";
+  const { isLoading, results, search, searchText, addHistory, deleteAllHistory, deleteHistoryItem } =
+    useSearch(initialQuery);
 
   return (
-    <List isLoading={isLoading} onSearchTextChange={search} searchBarPlaceholder="Search Google or enter a URL...">
+    <List
+      isLoading={isLoading}
+      searchText={searchText}
+      onSearchTextChange={search}
+      searchBarPlaceholder="Search Google or enter a URL..."
+    >
       <List.Section title="Results" subtitle={results.length + ""}>
         {results.map((item) => (
           <List.Item
@@ -28,18 +35,31 @@ export default function Command() {
                   />
 
                   <Action.CopyToClipboard title="Copy URL to Clipboard" content={item.url} />
-                  <Action.CopyToClipboard title="Copy Suggestion to Clipboard" content={item.query} />
+                  <Action.CopyToClipboard
+                    title="Copy Suggestion to Clipboard"
+                    content={item.query}
+                    shortcut={Keyboard.Shortcut.Common.Copy}
+                  />
+                  <Action
+                    title="Set as Search Text"
+                    onAction={() => {
+                      search(item.query);
+                    }}
+                    icon={{ source: Icon.MagnifyingGlass }}
+                    shortcut={{ modifiers: ["shift"], key: "tab" }}
+                  />
                 </ActionPanel.Section>
 
                 <ActionPanel.Section title="History">
                   {item.isHistory && (
                     <Action
-                      title="Remove From History"
+                      title="Remove from History"
                       onAction={async () => {
                         await deleteHistoryItem(item);
                       }}
                       icon={{ source: Icon.Trash }}
-                      shortcut={{ modifiers: ["cmd"], key: "d" }}
+                      style={Action.Style.Destructive}
+                      shortcut={Keyboard.Shortcut.Common.Remove}
                     />
                   )}
 
@@ -49,6 +69,8 @@ export default function Command() {
                       await deleteAllHistory();
                     }}
                     icon={{ source: Icon.ExclamationMark }}
+                    style={Action.Style.Destructive}
+                    shortcut={Keyboard.Shortcut.Common.RemoveAll}
                   />
                 </ActionPanel.Section>
               </ActionPanel>

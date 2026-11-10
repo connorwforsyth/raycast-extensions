@@ -16,7 +16,8 @@ type IssueListItemProps = {
 export default function IssueListItem({ issue, mutate }: IssueListItemProps) {
   const updatedAt = new Date(issue.fields.updated);
   const assignee = issue.fields.assignee;
-
+  const hasChildIssues =
+    (issue.fields.subtasks && issue.fields.subtasks.length > 0) || issue.fields.issuetype?.name === "Epic";
   const keywords = [issue.key, issue.fields.status.name, issue.fields.issuetype.name];
 
   if (issue.fields.priority) {
@@ -55,7 +56,9 @@ export default function IssueListItem({ issue, mutate }: IssueListItemProps) {
       title={issue.fields.summary || "Unknown issue title"}
       subtitle={issue.key}
       accessories={accessories}
-      actions={<IssueActions issue={issue} mutate={mutate} showDetailsAction={true} />}
+      actions={
+        <IssueActions issue={issue} showChildIssuesAction={hasChildIssues} mutate={mutate} showDetailsAction={true} />
+      }
     />
   );
 }

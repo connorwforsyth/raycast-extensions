@@ -1,75 +1,57 @@
-import { Form, ActionPanel, Action, showToast, Toast, getPreferenceValues, popToRoot } from "@raycast/api";
-import axios from "axios";
-import { useRef, useState } from "react";
-import { requiredErrorText } from "./constants";
+import { Form, ActionPanel, Action, getPreferenceValues, popToRoot, showToast, Toast } from "@raycast/api";
+import { baseUrl } from "./constants";
 import { Preferences } from "./interface";
+import { getErrorMessage, getResponseErrorMessage } from "./utils";
+import { FormValidation, useForm } from "@raycast/utils";
+import fetch from "node-fetch";
 
-export default function Command(): JSX.Element {
+interface AddHeartbeatFormValues {
+  name: string;
+  period: string;
+  grace: string;
+}
+
+export default function AddHeartbeatCommand() {
   const preferences = getPreferenceValues<Preferences>();
+  const { handleSubmit, itemProps } = useForm<AddHeartbeatFormValues>({
+    async onSubmit(values) {
+      await showToast({ title: "Creating heartbeat...", style: Toast.Style.Animated });
 
-  const nameRef = useRef<Form.TextField>(null);
-  const periodRef = useRef<Form.TextField>(null);
-  const graceRef = useRef<Form.TextField>(null);
-
-  const [nameError, setNameError] = useState<string | undefined>();
-  const [periodError, setPeriodError] = useState<string | undefined>();
-  const [graceError, setGraceError] = useState<string | undefined>();
-
-  async function handleSubmit(item: any) {
-    if (item.name === "") {
-      setNameError(requiredErrorText);
-      return false;
-    }
-
-    if (item.period === "") {
-      setPeriodError(requiredErrorText);
-      return false;
-    }
-
-    if (item.grace === "") {
-      setGraceError(requiredErrorText);
-      return false;
-    }
-
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: "Creating heartbeat...",
-    });
-
-    await axios
-      .post("https://betteruptime.com/api/v2/heartbeats", item, {
-        headers: { Authorization: `Bearer ${preferences.apiKey}` },
+      await fetch(`${baseUrl}/heartbeats`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${preferences.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
       })
-      .then(() => {
-        toast.style = Toast.Style.Success;
-        toast.title = "Heartbeat created successfully";
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(await getResponseErrorMessage(response));
+          }
 
-        popToRoot();
-      })
-      .catch((error) => {
-        toast.style = Toast.Style.Failure;
-        toast.title = "Unable to create heartbeat";
-        toast.message = error.response.data.errors;
-      });
-  }
+          await showToast({ title: "Heartbeat created", style: Toast.Style.Success });
 
-  function dropNameErrorIfNeeded() {
-    if (nameError && nameError.length > 0) {
-      setNameError(undefined);
-    }
-  }
-
-  function dropPeriodErrorIfNeeded() {
-    if (periodError && periodError.length > 0) {
-      setPeriodError(undefined);
-    }
-  }
-
-  function dropGraceErrorIfNeeded() {
-    if (graceError && graceError.length > 0) {
-      setGraceError(undefined);
-    }
-  }
+          popToRoot();
+        })
+        .catch(async (error) => {
+          await showToast({
+            title: "Heartbeat not created",
+            style: Toast.Style.Failure,
+            message: getErrorMessage(error),
+          });
+        });
+    },
+    initialValues: {
+      period: "10800",
+      grace: "300",
+    },
+    validation: {
+      name: FormValidation.Required,
+      period: FormValidation.Required,
+      grace: FormValidation.Required,
+    },
+  });
 
   return (
     <Form
@@ -79,51 +61,9 @@ export default function Command(): JSX.Element {
         </ActionPanel>
       }
     >
-      <Form.TextField
-        id="name"
-        title="Name"
-        placeholder="Daily database backup"
-        ref={nameRef}
-        error={nameError}
-        onChange={dropNameErrorIfNeeded}
-        onBlur={(event) => {
-          if (event.target.value?.length == 0) {
-            setNameError(requiredErrorText);
-          } else {
-            dropNameErrorIfNeeded();
-          }
-        }}
-      />
-      <Form.TextField
-        id="period"
-        title="Period in seconds"
-        defaultValue="10800"
-        ref={periodRef}
-        error={periodError}
-        onChange={dropPeriodErrorIfNeeded}
-        onBlur={(event) => {
-          if (event.target.value?.length == 0) {
-            setPeriodError(requiredErrorText);
-          } else {
-            dropPeriodErrorIfNeeded();
-          }
-        }}
-      />
-      <Form.TextField
-        id="grace"
-        title="Grace in seconds"
-        defaultValue="300"
-        ref={graceRef}
-        error={graceError}
-        onChange={dropGraceErrorIfNeeded}
-        onBlur={(event) => {
-          if (event.target.value?.length == 0) {
-            setGraceError(requiredErrorText);
-          } else {
-            dropGraceErrorIfNeeded();
-          }
-        }}
-      />
+      <Form.TextField title="Name" placeholder="Daily database backup" {...itemProps.name} />
+      <Form.TextField title="Period in seconds" {...itemProps.period} />
+      <Form.TextField title="Grace in seconds" {...itemProps.grace} />
     </Form>
   );
 }

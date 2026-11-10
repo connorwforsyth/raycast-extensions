@@ -2,24 +2,46 @@ import { getPreferenceValues, getSelectedText } from "@raycast/api";
 import { useCachedState } from "@raycast/utils";
 import React from "react";
 import { LanguageCode } from "./languages";
-import { LanguageCodeSet, TranslatePreferences } from "./types";
+import { LanguageCodeSet } from "./types";
 import { AUTO_DETECT } from "./simple-translate";
 
-export const usePreferences = () => {
-  return React.useMemo(() => getPreferenceValues<TranslatePreferences>(), []);
+type _LegacySingleLanguageCodeSet = {
+  langFrom: LanguageCode;
+  langTo: LanguageCode;
 };
 
-export const useTextState = () => {
+type _StoredLanguageCodeSet = _LegacySingleLanguageCodeSet | LanguageCodeSet;
+
+const unifyLegacyLanguageSet = (legacy: _StoredLanguageCodeSet): LanguageCodeSet => {
+  return {
+    langFrom: legacy.langFrom,
+    langTo: Array.isArray(legacy.langTo) ? legacy.langTo : [legacy.langTo],
+  };
+};
+
+export const usePreferences = () => {
+  return React.useMemo(() => getPreferenceValues<Preferences.Translate>(), []);
+};
+
+export const useTextState = (launchInput?: { text: string; requestId: string }) => {
   const preferences = usePreferences();
-  const [text, setText] = React.useState("");
+  const inputText = launchInput?.text;
+  const requestId = launchInput?.requestId;
+  const [text, setText] = React.useState(inputText ?? "");
   const textRef = React.useRef(text);
   textRef.current = text;
 
   React.useEffect(() => {
+    if (inputText !== undefined) {
+      setText((current) => (current === inputText ? current : inputText));
+      return;
+    }
+
+    let cancelled = false;
     if (preferences.autoInput) {
       getSelectedText()
         .then((cbText) => {
-          if (!textRef.current) {
+          if (!cancelled && !textRef.current) {
             setText(cbText ?? "");
           }
         })
@@ -27,35 +49,80 @@ export const useTextState = () => {
           console.log("Error:", err);
         });
     }
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [inputText, requestId]);
 
   return [text, setText] as const;
 };
 
 export const useSelectedLanguagesSet = () => {
   const preferences = usePreferences();
-  const [selectedLanguageSet, setSelectedLanguageSet] = useCachedState<LanguageCodeSet>("selectedLanguageSet", {
-    langFrom: preferences.lang1,
-    langTo: preferences.lang2,
-  });
+  const [selectedLanguageSet, setSelectedLanguageSet] = useCachedState<_StoredLanguageCodeSet>(
+    "selectedLanguageSet",
+    unifyLegacyLanguageSet({
+      langFrom: preferences.langFrom,
+      langTo: preferences.lang1,
+    }),
+  );
 
-  return [selectedLanguageSet, setSelectedLanguageSet] as const;
+  return [unifyLegacyLanguageSet(selectedLanguageSet), setSelectedLanguageSet] as const;
 };
 
 export const usePreferencesLanguageSet = () => {
   const preferences = usePreferences();
-  const preferencesLanguageSet: LanguageCodeSet = { langFrom: preferences.lang1, langTo: preferences.lang2 };
+  const preferencesLanguageSet: LanguageCodeSet = {
+    langFrom: preferences.langFrom,
+    langTo: [preferences.lang1, preferences.lang2],
+  };
   return preferencesLanguageSet;
 };
 
-export const isSameLanguageSet = (langSet1: LanguageCodeSet, langSet2: LanguageCodeSet) => {
-  return langSet1.langFrom === langSet2.langFrom && langSet1.langTo === langSet2.langTo;
+/** Pause between keystrokes before starting a translation. Pastes and selections skip this. */
+export const TRANSLATE_DEBOUNCE_MS = 250;
+
+const isSingleCharacterEdit = (previous: string, next: string) => {
+  const before = Array.from(previous);
+  const after = Array.from(next);
+  if (Math.abs(before.length - after.length) !== 1) return false;
+
+  const [shorter, longer] = before.length < after.length ? [before, after] : [after, before];
+  let i = 0;
+  let j = 0;
+  let skipped = 0;
+  while (i < shorter.length && j < longer.length) {
+    if (shorter[i] === longer[j]) {
+      i += 1;
+      j += 1;
+    } else {
+      skipped += 1;
+      if (skipped > 1) return false;
+      j += 1;
+    }
+  }
+
+  return true;
 };
 
 export const useDebouncedValue = <T>(value: T, delay: number) => {
   const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
+  const previousValue = React.useRef(value);
 
   React.useEffect(() => {
+    const previous = previousValue.current;
+    previousValue.current = value;
+
+    // Keep the pause for typing. A paste, a cleared field, or a new selection
+    // is not a one-character edit, so translate it immediately.
+    const isTyping =
+      typeof value === "string" && typeof previous === "string" && isSingleCharacterEdit(previous, value);
+
+    if (!isTyping) {
+      setDebouncedValue(value);
+      return;
+    }
+
     const handler = setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
@@ -66,6 +133,12 @@ export const useDebouncedValue = <T>(value: T, delay: number) => {
   }, [value, delay]);
 
   return debouncedValue;
+};
+
+export const useAllLanguageSets = () => {
+  const [languages, setLanguages] = useCachedState<_StoredLanguageCodeSet[]>("languages", []);
+
+  return [languages.map(unifyLegacyLanguageSet), setLanguages] as const;
 };
 
 export const useSourceLanguage = () => {

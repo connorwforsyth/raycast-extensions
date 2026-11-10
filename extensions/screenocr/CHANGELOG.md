@@ -1,5 +1,64 @@
 # ScreenOCR Changelog
 
+## [Clipboard Image OCR on macOS] - 2026-10-31
+
+- Added macOS support for **Recognize Text in Clipboard Image**, including copied image files, using Apple Vision with your recognition preferences.
+- Added an **After Recognition (macOS)** option for that command: copy the text (replaces the clipboard image) or paste it into the active app and restore the original clipboard contents.
+- Fixed macOS failures being copied as recognized text with a success toast. Errors now show a failure toast and nothing is copied.
+- Fixed cancelling a region selection: it is now silent and leaves the clipboard unchanged, including with **Keep image in clipboard** enabled, where a stale clipboard image could previously be recognized.
+- Added a "Recognizing…" progress notification while clipboard recognition runs.
+- Clarified that **Keep image in clipboard** and **Play sounds** apply to screen-capture commands only.
+
+## [Windows Support] - 2026-09-20
+
+- Added Windows support for region, full-desktop and clipboard-image recognition using the local Windows OCR engine.
+- Added installed Windows OCR-language selection with separate Windows and macOS preferences.
+- Added optional paste/copy-and-paste result actions on Windows; macOS retains its existing copy behavior.
+- Preserved existing command IDs and the cross-extension result shape; Windows callbacks distinguish cancellation and failure from recognized text.
+- Preserved the existing macOS Swift source, recognition settings and command behavior.
+- Kept barcode and QR-code recognition available on macOS with an explicit Windows limitation.
+
+## [Fix macOS 26 (Tahoe) and macOS 27 (Golden Gate) Support] - 2026-07-23
+
+- Fixed all commands failing with "Failed to recognize text" on macOS 26 (Tahoe) and macOS 27 (Golden Gate). The system text recognition models log diagnostics to stdout, which the extension uses to return its result, corrupting the output; recognition now runs with stdout muted.
+- Fixed full-screen recognition returning no image: replaced the deprecated `CGWindowListCreateImage` with ScreenCaptureKit (`SCScreenshotManager`), capturing at native pixel resolution for better accuracy.
+- Migrated text and barcode recognition to the modern Vision Swift API (`RecognizeTextRequest` / `DetectBarcodesRequest`).
+- Raised the minimum macOS version to 15.0.
+
+## [Improvements] - 2026-07-22
+
+- Added more Apple Vision recognition languages to the primary and additional language selectors
+
+## [Improvements] - 2026-01-19
+
+- Added [cross-extension support](https://github.com/LitoMore/raycast-cross-extension-conventions) to enable OCR results to be used by other extensions
+- Added documentation to include [cross-extension usage](docs/cross-extension-usage.md)
+- Improved type safety for cross-extension callbacks by introducing `OCRResult` and `LaunchContext` types with `satisfies` validation
+- Refactored code to use early returns for improved readability
+- Modernized error handling using `@raycast/utils` while respecting user preferences
+- Updated dependencies
+
+## [Improvements] - 2026-01-17
+
+- Fix caching issues
+
+## [Improvements] - 2025-11-13
+
+- Added option to hide toast messages
+- Added option to mute shutter sound
+
+## [Improvements] - 2025-07-13
+
+- Added support for Arabic and Najdi languages
+- Added support for detecting barcodes and QR codes
+
+## [Improvements] - 2024-10-07
+
+- Migrated codebase to use new Swift macros
+- Replaced all HUDs with emojis with styled toast messages for user feedback
+- Added list section to the `Select Recognition Languages` command
+- Grouped checkbox preferences into a single section
+
 ## [Fixes & Improvements] - 2024-05-21
 
 - Selecting an area for text recognition left the original image in the clipboard

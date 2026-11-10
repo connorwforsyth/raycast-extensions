@@ -1,14 +1,11 @@
-import { existsSync } from "fs";
-import { mkdirSync } from "fs";
+import { statSync, createReadStream, createWriteStream } from "node:fs";
 import { showToast, Toast, getSelectedFinderItems, getPreferenceValues, showHUD } from "@raycast/api";
-import { statSync, createReadStream, createWriteStream } from "fs";
 import fetch from "node-fetch";
-import { dirname, basename, join } from "path";
-import { compressImageResponseScheme } from "./zodSchema";
-import { Preference } from "./types";
-import { resolveOutputPath } from "./lib/utils";
+import { compressImageResponseScheme } from "./lib/zodSchema";
+import { filterSupportedImagePaths, isMacOS, resolveOutputFile } from "./lib/utils";
+import { showFailureToast } from "@raycast/utils";
 
-const preferences = getPreferenceValues<Preference>();
+const preferences = getPreferenceValues<Preferences>();
 
 type Props = {
   arguments: {
@@ -23,41 +20,48 @@ export default async function main(props: Props) {
 
   try {
     _validateArguments(props.arguments);
-  } catch (e) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Error",
-      message: e instanceof Error ? e.message : "Could not validate arguments",
-    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showFailureToast(message, { title: "Could not validate arguments" });
     return;
   }
 
   try {
-    filePaths = (await getSelectedFinderItems()).map((f) => f.path);
-  } catch (e) {
+    filePaths = filterSupportedImagePaths((await getSelectedFinderItems()).map((f) => f.path));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showFailureToast(message, { title: `Could not get the selected ${isMacOS ? "Finder" : "File Explorer"} items` });
+    return;
+  }
+
+  if (filePaths.length === 0) {
     await showToast({
       style: Toast.Style.Failure,
-      title: "Error",
-      message: e instanceof Error ? e.message : "Could not get the selected Finder items",
+      title: "No images found",
+      message: "Selected files must be AVIF, PNG, JPEG or WebP images.",
     });
     return;
   }
+
+  const isSingleFile = filePaths.length === 1;
 
   const toast = await showToast({
     style: Toast.Style.Animated,
-    title: "Resizing images...",
+    title: `Resizing ${filePaths.length} ${isSingleFile ? "image" : "images"}...`,
   });
 
   try {
-    const results = await Promise.all(filePaths.map((filePath) => _compressAndResizeImage(filePath, props)));
+    const results = await Promise.all(
+      filePaths.map((filePath) => _compressAndResizeImage(filePath, isSingleFile, props)),
+    );
     const totalOriginalSize = results.reduce((acc, cur) => acc + cur[0].originalSize, 0);
     const totalCompressedSize = results.reduce((acc, cur) => acc + cur[0].compressedSize, 0);
 
     await showHUD(`Resizing successful 🎉  (-${(100 - (totalCompressedSize / totalOriginalSize) * 100).toFixed(1)}%)`);
-  } catch (e) {
+  } catch (error) {
     toast.style = Toast.Style.Failure;
     toast.title = "Error";
-    toast.message = e instanceof Error ? e.message : "failed to compress images";
+    toast.message = error instanceof Error ? error.message : "failed to compress images";
   }
 }
 
@@ -74,8 +78,13 @@ const _validateArguments = (args: Props["arguments"]) => {
   if (args.method === "fit" && !(args.width && args.height)) {
     throw new Error("Width and height are required for fit method");
   }
-  if (args.method === "scale" && !(args.width || args.height)) {
-    throw new Error("Width or height are required for scale method");
+  if (args.method === "scale") {
+    if (!(args.width || args.height)) {
+      throw new Error("Width or height are required for scale method");
+    }
+    if (args.width && args.height) {
+      throw new Error("You cannot specify both width and height for scale method. Only specify one of them");
+    }
   }
   if (args.method === "cover" && !(args.width && args.height)) {
     throw new Error("Width and height are required for cover method");
@@ -87,13 +96,14 @@ const _validateArguments = (args: Props["arguments"]) => {
 
 const _compressAndResizeImage = async (
   filePath: string,
-  props: Props
+  isSingleFile: boolean,
+  props: Props,
 ): Promise<
   [
     {
       originalSize: number;
       compressedSize: number;
-    }
+    },
   ]
 > => {
   const { size } = statSync(filePath);
@@ -120,6 +130,17 @@ const _compressAndResizeImage = async (
   // Download compressed image
   const downloadUrl = resJson.output.url;
 
+  // Resize object that is sent to the API. The width and height are optional in case of the scale method, otherwise they will both be filled.
+  const resize: { method: string; width?: number; height?: number } = {
+    method: props.arguments.method,
+  };
+  if (props.arguments.width) {
+    resize.width = Number(props.arguments.width);
+  }
+  if (props.arguments.height) {
+    resize.height = Number(props.arguments.height);
+  }
+
   const resResized = await fetch(downloadUrl, {
     method: "POST",
     headers: {
@@ -127,23 +148,18 @@ const _compressAndResizeImage = async (
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      resize: {
-        method: props.arguments.method,
-        width: Number(props.arguments.width),
-        height: Number(props.arguments.height),
-      },
+      resize,
     }),
   });
 
-  let outputDir = dirname(filePath);
-  if (!preferences.overwrite) {
-    outputDir = resolveOutputPath(filePath, preferences.destinationFolderPath);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir);
-    }
-  }
+  // Save resized image
+  const outputPath = resolveOutputFile(filePath, {
+    destinationFolderPath: preferences.resizeDestinationFolderPath,
+    overwrite: preferences.overwrite,
+    isSingleFile: preferences.saveSingleFileNextToOriginal && isSingleFile,
+    suffix: "-resized",
+  });
 
-  const outputPath = join(outputDir, basename(filePath));
   const outputFileStream = createWriteStream(outputPath);
 
   await new Promise((resolve, reject) => {

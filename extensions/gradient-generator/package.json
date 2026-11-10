@@ -1,0 +1,109 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "version": "1.2.0",
+  "name": "gradient-generator",
+  "title": "Gradient Generator",
+  "description": "Create, preview and save gradients locally; copy CSS, Tailwind and SwiftUI, or export PNG and SVG files.",
+  "icon": "icon.png",
+  "author": "smcnab1",
+  "contributors": [],
+  "categories": [
+    "Design Tools",
+    "Developer Tools"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "create-gradient",
+      "title": "Create Gradient",
+      "subtitle": "Gradient Generator",
+      "description": "Create a gradient and preview it.",
+      "mode": "view"
+    },
+    {
+      "name": "random-gradient",
+      "title": "Random Gradient",
+      "subtitle": "Gradient Generator",
+      "description": "Show a random gradient with options for 2 or 3 stops.",
+      "mode": "view"
+    },
+    {
+      "name": "saved-gradients",
+      "title": "Saved Gradients",
+      "subtitle": "Gradient Generator",
+      "description": "View and manage saved gradients.",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "svgExportDirectory",
+      "type": "directory",
+      "required": true,
+      "title": "SVG Export Directory",
+      "description": "Choose the directory where SVG files will be saved",
+      "default": "~/Downloads"
+    },
+    {
+      "name": "pngExportDirectory",
+      "type": "directory",
+      "required": true,
+      "title": "PNG Export Directory",
+      "description": "Choose the directory where PNG files will be saved",
+      "default": "~/Downloads"
+    },
+    {
+      "name": "tailwindOutputMode",
+      "type": "dropdown",
+      "required": false,
+      "title": "Tailwind Output Mode",
+      "description": "Choose default Tailwind output format",
+      "default": "utility",
+      "data": [
+        {
+          "title": "Utility Classes (bg-[...])",
+          "value": "utility"
+        },
+        {
+          "title": "Raw CSS",
+          "value": "css"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "2.10.1",
+    "@raycast/utils": "2.3.3",
+    "pngjs": "7.0.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "2.2.0",
+    "@types/node": "26.6.5",
+    "@types/pngjs": "6.0.5",
+    "@types/react": "19.3.0",
+    "@types/react-test-renderer": "19.3.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "prettier": "3.9.10",
+    "react-test-renderer": "19.3.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist -o dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint && eslint tests scripts && prettier --check tests scripts",
+    "publish": "ray publish",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run build && npm run typecheck && npm test && npm run lint",
+    "test:swiftui": "tsx scripts/verify-swiftui.ts"
+  },
+  "engines": {
+    "node": ">=26.12.1"
+  }
+}

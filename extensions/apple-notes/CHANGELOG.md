@@ -1,5 +1,60 @@
 # Apple Notes Changelog
 
+## [Meeting Notes to Actions Skill] - 2026-09-24
+
+- Update to Raycast API 2.5.0 for public bundled-skill support.
+- Extract decisions and action items from meeting notes and save requested summaries with source links.
+
+## [AI Extension Improvements] - 2026-09-01
+
+- Add `delete-note`, `restore-note`, `move-note`, `append-to-note`, and `list-folders` AI tools
+- Add tag filtering to the `search-notes` AI tool
+- Let the "AI Note" command append AI-generated content to an existing note via a new optional `note` argument
+
+## [Bug Fixes] - 2026-06-07
+
+- Fix tags not rendering in note detail view
+- Fix "Recently Deleted" notes not appearing in search results
+- Fix duplicate ⌘⇧M keyboard shortcut — Plain Text copy action now uses ⌘⇧T
+- Fix menu bar icon and missing preferences configuration
+- Fix missing `await` on async calls and remove unnecessary `await` on sync `pop()`
+- Fix strict equality (`===`) for primary key comparisons and add missing radix in `parseInt` calls
+- Remove deprecated AI model
+- Remove `lodash` dependency, replace `partition` with local implementation
+- Update packages
+
+## [Bug Fix Update] - 2026-02-26
+
+- Fix `get-note-content` and `update-note` timing out when Notes is not already running by using a longer AppleScript timeout.
+- Fix AI tool failures caused by UUID note IDs by resolving them to x-coredata IDs before calling AppleScript.
+- Add optional `searchText` filtering to `search-notes` so older notes can be found outside the most recent results window.
+
+## [View Random Note command] - 2025-06-30
+
+Add a new command for viewing a random note from a user's note library.
+
+## [Add Chinese Pinyin input match] - 2025-06-30
+
+When using the Chinese Pinyin input method, the note title, folder name, and snippet are now matched using Pinyin.
+
+## [Bug Fix Update] - 2025-05-22
+
+Add a preference for choosing the maximum number of notes to allow AI to use to prevent issues with running out of memory loading all notes.
+
+## [Bug Fix Update] - 2025-03-06
+
+Fix for app crashing when user has not granted disk access.
+
+## [Bug Fix Update] - 2025-02-27
+
+Fix for 'JS heap out of memory error' reported by a user in issue #17137.
+
+## [✨ AI Enhancements] - 2025-02-21
+
+## [Bug Fix Update] - 2024-11-22
+
+Fix "Create note" from empty "Search notes" view, where a new note would be created with random characters instead of value from searchbar.
+
 ## [Bug Fix Update] - 2024-06-22
 
 Fix Add Text to Note hooks rendering issue.
@@ -10,7 +65,7 @@ Add a new command allowing users to see the currently selected note from within 
 
 ## [Change AI model for notes] - 2024-05-23
 
-Now, creating an AI note will use GPT-4o instead of GPT-4. 
+Now, creating an AI note will use GPT-4o instead of GPT-4.
 
 This update also fixes a bug for users not able to create a note if the default folder isn't spelled "Notes".
 
@@ -37,7 +92,7 @@ Add a new command called `Add Text to Note` allowing you to quickly append text 
 
 Merge `Copy Mobile Note URL` into `Copy Note URL` by using the `applenotes://` scheme that works on all platforms.
 
-## [Find related notes] - 2024-04-10 
+## [Find related notes] - 2024-04-10
 
 Add `Find Related Notes` feature to suggest relevant notes based on a selected note.
 
@@ -117,7 +172,7 @@ There's now proper support for pinned notes, just like on the Apple Notes native
 
 ## [Open note in separate windows] - 2023-03-31
 
-- Added the function to open notes in separate windows. 
+- Added the function to open notes in separate windows.
 
 ## [Fix error handling] - 2023-02-20
 

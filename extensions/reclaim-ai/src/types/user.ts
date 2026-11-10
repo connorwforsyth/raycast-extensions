@@ -35,20 +35,36 @@ export interface User {
 export interface UserFeatures {
   scheduler: number;
   extraScopes: boolean;
+  // Reclaim 2.0 ("Assistant"). When enabled, tasks live in the /reclaim-tasks
+  // (GTD) pool rather than the 1.0 /tasks endpoints.
+  assistant: {
+    enabled: boolean;
+  };
   assistSettings: {
-    bypassed: boolean;
-    travel: boolean;
-    otherTravelDuration: number;
-    conferenceBuffer: boolean;
-    conferenceBufferType: string;
-    conferenceBufferDuration: number;
-    conferenceBufferPrivate: boolean;
-    customConferenceBufferTitle: string;
-    assignmentPaddingDuration: number;
-    focus: boolean;
-    allOneOnOnesBusy: boolean;
-    autoLockForMeetings: string;
-    autoLockForNonMeetings: string;
+    travel?: boolean;
+    otherTravelDuration?: number;
+    conferenceBuffer?: boolean;
+    conferenceBufferDuration?: number;
+    assignmentPaddingDuration?: number;
+    conferenceBufferPrivate?: boolean;
+    customConferenceBufferTitle?: string;
+    focus?: boolean;
+    allOneOnOnesBusy?: boolean;
+    sendMeetingNotifications?: boolean;
+    useFreeBusyEmojis?: boolean;
+    useLockEmoji?: boolean;
+    includeDescription?: boolean;
+    includeAttribution?: boolean;
+    smartSeries?: boolean;
+    showClassicHabits?: boolean;
+    allowSmartSeriesOptIn?: boolean;
+    smartSeriesMigrateComplete?: boolean;
+    neverSeenClassicHabits?: boolean;
+    assistDays?: number;
+    bypassed?: boolean;
+    dayZero?: string;
+    schedulerDisabled?: boolean;
+    rescheduleUnstarted?: boolean;
   };
   openAISettings: {
     enabled: boolean;

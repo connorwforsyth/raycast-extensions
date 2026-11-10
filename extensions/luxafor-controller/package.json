@@ -1,0 +1,137 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "version": "1.1.0",
+  "name": "luxafor-controller",
+  "title": "Luxafor Controller",
+  "description": "Control your Luxafor LED device directly from Raycast",
+  "icon": "logo.png",
+  "author": "smcnab1",
+  "contributors": [],
+  "categories": [
+    "Applications"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "control-luxafor",
+      "title": "Control Luxafor",
+      "description": "Control your Luxafor device",
+      "mode": "view"
+    },
+    {
+      "name": "luxafor-status",
+      "title": "Luxafor Menu Bar",
+      "description": "View the last API-accepted command and send light changes; physical state is unknown",
+      "mode": "menu-bar",
+      "interval": "1m"
+    },
+    {
+      "name": "set-busy",
+      "title": "Set Busy",
+      "description": "Send a solid red Luxafor command; suitable for an alias or hotkey",
+      "mode": "no-view"
+    },
+    {
+      "name": "set-available",
+      "title": "Set Available",
+      "description": "Send a solid green Luxafor command; suitable for an alias or hotkey",
+      "mode": "no-view"
+    },
+    {
+      "name": "turn-off",
+      "title": "Turn off",
+      "description": "Send custom 000000 to turn Luxafor off; suitable for an alias or hotkey",
+      "mode": "no-view"
+    },
+    {
+      "name": "custom-colour",
+      "title": "Set Custom Color",
+      "description": "Send a validated three- or six-digit hex color to Luxafor",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "userId",
+      "type": "password",
+      "required": true,
+      "title": "Luxafor User ID",
+      "description": "Your Luxafor User ID from the Webhook tab in Luxafor software",
+      "placeholder": "Enter your Luxafor User ID",
+      "label": "User ID"
+    },
+    {
+      "name": "apiEndpoint",
+      "type": "dropdown",
+      "required": true,
+      "title": "API Endpoint",
+      "description": "Use the documented .com service; .co.uk is retained for existing configurations and is unverified",
+      "default": "com",
+      "label": "API Endpoint",
+      "data": [
+        {
+          "title": "api.luxafor.com",
+          "value": "com"
+        },
+        {
+          "title": "api.luxafor.co.uk",
+          "value": "co.uk"
+        }
+      ]
+    },
+    {
+      "name": "menubarMode",
+      "type": "dropdown",
+      "required": false,
+      "title": "Menubar Layout",
+      "description": "Choose Busy/Available actions or all seven base colors",
+      "default": "simple",
+      "label": "Menubar Layout",
+      "data": [
+        {
+          "title": "Busy and Available",
+          "value": "simple"
+        },
+        {
+          "title": "Full Color Control",
+          "value": "full"
+        }
+      ]
+    },
+    {
+      "name": "debugMode",
+      "type": "checkbox",
+      "required": false,
+      "title": "Legacy Debug Mode",
+      "description": "Legacy setting retained; request bodies, responses and identifiers are never logged",
+      "default": false,
+      "label": "Legacy Debug Mode"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.11.1",
+    "@raycast/utils": "^2.3.3"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist -o dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run build && npm run typecheck && npm run lint"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  }
+}

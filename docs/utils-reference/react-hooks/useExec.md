@@ -26,11 +26,13 @@ function useExec<T, U>(
     timeout?: number;
     parseOutput?: ParseExecOutputHandler<T>;
     initialData?: U;
+    cacheWriteDebounce?: number;
     keepPreviousData?: boolean;
     execute?: boolean;
     onError?: (error: Error) => void;
     onData?: (data: T) => void;
-    onWillExecute?: (args: string[]) -> void;
+    onWillExecute?: (args: string[]) => void;
+    failureToastOptions?: Partial<Pick<Toast.Options, "title" | "primaryAction" | "message">>;
   }
 ): AsyncState<T> & {
   revalidate: () => void;
@@ -57,11 +59,13 @@ function useExec<T, U>(
     timeout?: number;
     parseOutput?: ParseExecOutputHandler<T>;
     initialData?: U;
+    cacheWriteDebounce?: number;
     keepPreviousData?: boolean;
     execute?: boolean;
     onError?: (error: Error) => void;
     onData?: (data: T) => void;
-    onWillExecute?: (args: string[]) -> void;
+    onWillExecute?: (args: string[]) => void;
+    failureToastOptions?: Partial<Pick<Toast.Options, "title" | "primaryAction" | "message">>;
   }
 ): AsyncState<T> & {
   revalidate: () => void;
@@ -98,6 +102,7 @@ With a few options:
 
 Including the [useCachedPromise](./useCachedPromise.md)'s options:
 
+- `options.cacheWriteDebounce` is the debounce time in milliseconds for writing results to the cache.
 - `options.keepPreviousData` is a boolean to tell the hook to keep the previous results instead of returning the initial value if there aren't any in the cache for the new arguments. This is particularly useful when used for data for a List to avoid flickering. See [Argument dependent on user input](#argument-dependent-on-user-input) for more information.
 
 Including the [useCachedState](./useCachedState.md)'s options:
@@ -110,6 +115,7 @@ Including the [usePromise](./usePromise.md)'s options:
 - `options.onError` is a function called when an execution fails. By default, it will log the error and show a generic failure toast with an action to retry.
 - `options.onData` is a function called when an execution succeeds.
 - `options.onWillExecute` is a function called when an execution will start.
+- `options.failureToastOptions` are the options to customize the title, message, and primary action of the failure toast.
 
 ### Return
 

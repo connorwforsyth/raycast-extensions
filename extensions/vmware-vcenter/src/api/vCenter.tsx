@@ -15,12 +15,12 @@ import {
   VmConsoleTicketsCreateSpec,
   VmConsoleTicketsSummary,
 } from "./types";
-import fetch from "node-fetch";
 
 export class vCenter {
   private readonly _credential: string;
   private _token: string | undefined;
   private readonly _fqdn: string;
+  private readonly _timeout: number = 3000;
 
   constructor(fqdn: string, username: string, password: string) {
     this._fqdn = fqdn;
@@ -38,7 +38,12 @@ export class vCenter {
       method: "POST",
       headers: {
         Authorization: `Basic ${this._credential}`,
+        // undici (Raycast's Node runtime) sends `Accept-Language: *` by default, which makes
+        // vCenter store `*` as the session locale; VMRC's CloneSession then fails with
+        // vim.fault.InvalidLocale. Pin a valid locale so console tickets stay redeemable.
+        "Accept-Language": "en-US",
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -65,8 +70,8 @@ export class vCenter {
     if (token) this._token = token as string;
   }
 
-  async ListVM(): Promise<VMSummary[] | undefined> {
-    const url = `https://${this._fqdn}/api/vcenter/vm`;
+  async ListVM(searchParamString?: string): Promise<VMSummary[] | undefined> {
+    const url = new URL(`/api/vcenter/vm${searchParamString ? `/?${searchParamString}` : ""}`, `https://${this._fqdn}`);
 
     while (!this._token) {
       await this.getToken();
@@ -77,6 +82,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -88,7 +94,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "VM.FilterSpec.power-states field contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -124,6 +130,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -167,6 +174,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -208,6 +216,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -219,7 +228,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "Network.FilterSpec.types field contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -232,7 +241,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               503,
               "the system is unable to communicate with a service to complete the request",
-              ""
+              "",
             );
         }
       })
@@ -259,6 +268,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -270,7 +280,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "Policies.FilterSpec contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -283,7 +293,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               503,
               "the system is unable to communicate with a service to complete the request",
-              ""
+              "",
             );
         }
       })
@@ -310,6 +320,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -328,7 +339,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               503,
               "the system is unable to communicate with a service to complete the request",
-              ""
+              "",
             );
         }
       })
@@ -355,6 +366,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -393,6 +405,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         switch (response.status) {
@@ -466,6 +479,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -477,7 +491,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "Host.FilterSpec.connection-states field contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -513,6 +527,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -524,7 +539,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "Network.FilterSpec.types field contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -560,6 +575,7 @@ export class vCenter {
       headers: {
         "vmware-api-session-id": this._token,
       },
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {
@@ -571,7 +587,7 @@ export class vCenter {
             throw new ErrorApiGetToken(
               400,
               "Datastore.FilterSpec.types field contains a value that is not supported by the server",
-              ""
+              "",
             );
           case 401:
             this._token = undefined;
@@ -597,7 +613,7 @@ export class vCenter {
 
   async VMCreateConsoleTickets(
     vm: string,
-    type: VmConsoleTicketsType = VmConsoleTicketsType.VMRC
+    type: VmConsoleTicketsType = VmConsoleTicketsType.VMRC,
   ): Promise<VmConsoleTicketsSummary | undefined> {
     const url = `https://${this._fqdn}/api/vcenter/vm/${vm}/console/tickets`;
     const body: VmConsoleTicketsCreateSpec = {
@@ -615,6 +631,7 @@ export class vCenter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this._timeout),
     })
       .then((response) => {
         if (response.ok) {

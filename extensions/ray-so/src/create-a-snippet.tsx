@@ -1,8 +1,18 @@
-import { Form, ActionPanel, closeMainWindow, showToast, Action, Toast, Color } from "@raycast/api";
+import {
+  Form,
+  ActionPanel,
+  closeMainWindow,
+  open,
+  showToast,
+  Action,
+  Toast,
+  Color,
+  getPreferenceValues,
+  openExtensionPreferences,
+  Icon,
+} from "@raycast/api";
 import { useFetch } from "@raycast/utils";
-import { useState } from "react";
-import open from "open";
-import { encodeURI } from "js-base64";
+import { createRaySoUrl } from "./utils";
 
 interface Values {
   title: string;
@@ -24,25 +34,12 @@ interface Data {
   }[];
   padding: number[];
 }
-const defaultSnippet: Values = {
-  title: "Untitled%201",
-  background: "true",
-  darkMode: "true",
-  padding: "16",
-  language: "auto",
-  snippet: "",
-  color: "candy",
-};
-
 export default function CreateSnippet() {
-  const [code, setCode] = useState<Values>(defaultSnippet);
+  const preferences = getPreferenceValues<Preferences>();
   const { data } = useFetch<Data>("https://ray.so/api/config");
-  const url = `https://ray.so/#theme=${code.color}&background=${code.background}&darkMode=${code.darkMode}&padding=${
-    code.padding
-  }&title=${code.title || "Untitled%201"}&code=${encodeURI(code.snippet)}&language=${code.language}`;
 
-  const handleSubmit = async () => {
-    if (!code.snippet) {
+  const handleSubmit = async (values: Values) => {
+    if (!values.snippet) {
       await showToast({
         style: Toast.Style.Failure,
         title: "Missing Code",
@@ -50,7 +47,18 @@ export default function CreateSnippet() {
       });
       return;
     }
-    open(url);
+
+    const url = createRaySoUrl({
+      theme: values.color,
+      background: values.background === "true",
+      darkMode: values.darkMode === "true",
+      padding: values.padding,
+      title: values.title || "Untitled 1",
+      code: values.snippet,
+      language: values.language,
+    });
+
+    await open(url);
     closeMainWindow();
   };
 
@@ -59,30 +67,17 @@ export default function CreateSnippet() {
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Create Snippet" onSubmit={handleSubmit} />
+          <Action title="Configure Default Settings" icon={Icon.Gear} onAction={openExtensionPreferences} />
         </ActionPanel>
       }
     >
-      <Form.TextField
-        id="title"
-        title="Title"
-        placeholder="Untitled 1"
-        onChange={(title) => setCode({ ...code, title: title.replace(/ /g, "%20").trim() })}
-      />
-      <Form.TextArea
-        id="code"
-        title="Code"
-        placeholder="Paste your code here"
-        onChange={(snippet) => setCode({ ...code, snippet })}
-      />
+      <Form.TextField id="title" title="Title" placeholder="Untitled 1" />
+      <Form.TextArea id="snippet" title="Code" placeholder="Paste your code here" />
       <Form.Separator />
-      <Form.Dropdown
-        id="color"
-        title="Color"
-        storeValue
-        defaultValue={data ? defaultSnippet.color : undefined}
-        onChange={(color) => setCode({ ...code, color })}
-        isLoading={!data}
-      >
+      <Form.Dropdown id="color" title="Theme" defaultValue={preferences.theme} isLoading={!data}>
+        {!data?.themes.some((theme) => theme.id === preferences.theme) && (
+          <Form.Dropdown.Item value={preferences.theme} title="Default Theme" />
+        )}
         <Form.Dropdown.Section title="Partners">
           {data?.themes.map(
             (theme) =>
@@ -112,40 +107,22 @@ export default function CreateSnippet() {
             ),
         )}
       </Form.Dropdown>
-      <Form.Dropdown
-        id="language"
-        title="Language"
-        storeValue
-        defaultValue={defaultSnippet.language}
-        onChange={(language) => setCode({ ...code, language })}
-        isLoading={!data}
-      >
+      <Form.Dropdown id="language" title="Language" storeValue defaultValue="auto" isLoading={!data}>
         <Form.Dropdown.Item value="auto" title="Auto-Detect" />
         {data?.languages.map((el: { id: string; name: string }, idx: number) => (
           <Form.Dropdown.Item key={idx} value={el.id} title={el.name} />
         ))}
       </Form.Dropdown>
-      <Form.Dropdown
-        id="background"
-        title="Background"
-        storeValue
-        onChange={(background) => setCode({ ...code, background })}
-      >
+      <Form.Dropdown id="background" title="Background" defaultValue={String(preferences.background)}>
         <Form.Dropdown.Item value="true" title="Yes" />
         <Form.Dropdown.Item value="false" title="No" />
       </Form.Dropdown>
-      <Form.Dropdown id="darkMode" title="Dark Mode" storeValue onChange={(darkMode) => setCode({ ...code, darkMode })}>
+      <Form.Dropdown id="darkMode" title="Dark Mode" defaultValue={String(preferences.darkMode)}>
         <Form.Dropdown.Item value="true" title="Yes" />
         <Form.Dropdown.Item value="false" title="No" />
       </Form.Dropdown>
-      <Form.Dropdown
-        id="padding"
-        title="Padding"
-        storeValue
-        onChange={(padding) => setCode({ ...code, padding })}
-        isLoading={!data}
-      >
-        {data?.padding.map((el: number, idx: number) => (
+      <Form.Dropdown id="padding" title="Padding" defaultValue={preferences.padding}>
+        {(data?.padding ?? [16, 32, 64, 128]).map((el: number, idx: number) => (
           <Form.Dropdown.Item key={idx} value={el.toString()} title={el.toString()} />
         ))}
       </Form.Dropdown>
@@ -164,5 +141,5 @@ function getGradientIconDataURL({ from, to }: Data["themes"][0]["background"]) {
   </defs>
   <circle cx="12" cy="12" r="12" fill="url(#gradient)" />
 </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
 }

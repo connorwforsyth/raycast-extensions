@@ -1,8 +1,6 @@
-import { getPreferenceValues } from "@raycast/api";
-import axios from "axios";
+import { api } from "../../utils/api";
 import { z } from "zod";
-import { Project } from "./types";
-import { Preferences } from "../../types";
+import { Contract, Project } from "./types";
 import { Customer } from "../customers/types";
 import { Task } from "../tasks/types";
 
@@ -23,22 +21,19 @@ const projectSchema = z.array(
         name: z.string(),
         active: z.boolean(),
         billable: z.boolean(),
-      })
+      }),
     ),
-  })
+    contract: z
+      .object({
+        user_id: z.number(),
+        active: z.boolean(),
+      })
+      .optional(),
+  }),
 );
 
-const preferences = getPreferenceValues<Preferences>();
-axios.defaults.baseURL = `https:/${preferences.url_prefix}.mocoapp.com/api/v1`;
-
 export const fetchProjects = async (): Promise<Project[]> => {
-  const { data } = await axios.get("/projects/assigned", {
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Token token=${preferences.apikey}`,
-    },
-  });
+  const { data } = await api.get("/projects/assigned?active=true");
 
   const projects = projectSchema.parse(data);
 
@@ -54,6 +49,7 @@ export const fetchProjects = async (): Promise<Project[]> => {
         billable: project.billable as boolean,
         customer: project.customer as Customer,
         tasks: project.tasks as Task[],
-      })
+        contract: project.contract as Contract,
+      }),
     );
 };

@@ -1,5 +1,16 @@
-import { TodoItem, TodoSections, editingAtom, searchBarTextAtom, todoAtom } from "../atoms";
-import { compare, insertIntoSection } from "../utils";
+import {
+  TodoItem,
+  TodoSections,
+  editingAtom,
+  editingTagAtom,
+  editingTagNameAtom,
+  searchBarTextAtom,
+  todoAtom,
+  editingDueDateAtom,
+  editingDueDateValueAtom,
+} from "../atoms";
+import { confetti } from "../utils";
+import { preferences } from "../config";
 
 import _ from "lodash";
 import { useAtom } from "jotai";
@@ -7,28 +18,31 @@ import { useAtom } from "jotai";
 export const useTodo = ({ item, idx, sectionKey }: { item: TodoItem; idx: number; sectionKey: keyof TodoSections }) => {
   const [todoSections, setTodoSections] = useAtom(todoAtom);
   const [, setEditing] = useAtom(editingAtom);
+  const [, setEditingTag] = useAtom(editingTagAtom);
+  const [, setEditingTagName] = useAtom(editingTagNameAtom);
+  const [, setEditingDueDate] = useAtom(editingDueDateAtom);
+  const [, setEditingDueDateValue] = useAtom(editingDueDateValueAtom);
   const [, setSearchBarText] = useAtom(searchBarTextAtom);
 
-  const setClone = () => {
-    setTodoSections(_.cloneDeep(todoSections));
+  const updateTodo = (update: (sections: TodoSections, todo: TodoItem) => void) => {
+    const sections = _.cloneDeep(todoSections);
+    update(sections, sections[sectionKey][idx]);
+    setTodoSections(sections);
   };
 
   const toggleCompleted = (completed: boolean) => {
-    todoSections[sectionKey][idx].completed = completed;
-    todoSections[sectionKey].splice(idx, 1);
-    todoSections[sectionKey] = [...insertIntoSection(todoSections[sectionKey], item, compare)];
-    setClone();
+    updateTodo((_sections, todo) => {
+      todo.completed = completed;
+    });
   };
 
   const moveToSection = (newSection: keyof TodoSections) => {
-    if (newSection === "completed") {
-      item.completed = true;
-    } else if (newSection === "todo") {
-      item.completed = false;
-    }
-    todoSections[newSection] = [...insertIntoSection(todoSections[newSection], item, compare)];
-    todoSections[sectionKey].splice(idx, 1);
-    setClone();
+    updateTodo((sections, todo) => {
+      if (newSection === "completed") todo.completed = true;
+      else if (newSection === "todo") todo.completed = false;
+      sections[sectionKey].splice(idx, 1);
+      sections[newSection].push(todo);
+    });
   };
 
   const unPin = () => {
@@ -40,11 +54,13 @@ export const useTodo = ({ item, idx, sectionKey }: { item: TodoItem; idx: number
 
   // don't change section if pinned
   const markCompleted = () => {
+    const { useConfetti } = preferences;
     if (sectionKey === "pinned") {
       toggleCompleted(true);
     } else {
       moveToSection("completed");
     }
+    if (useConfetti) confetti();
   };
 
   // don't change section if pinned
@@ -57,12 +73,14 @@ export const useTodo = ({ item, idx, sectionKey }: { item: TodoItem; idx: number
   };
 
   const toggleTodo = () => {
-    item.completed ? markTodo() : markCompleted();
+    if (item.completed) markTodo();
+    else markCompleted();
   };
 
   const deleteTodo = () => {
-    todoSections[sectionKey].splice(idx, 1);
-    setClone();
+    updateTodo((sections) => {
+      sections[sectionKey].splice(idx, 1);
+    });
   };
 
   const editTodo = () => {
@@ -73,10 +91,39 @@ export const useTodo = ({ item, idx, sectionKey }: { item: TodoItem; idx: number
     setSearchBarText(item.title);
   };
 
-  const setPriority = (priority?: 1 | 2 | 3) => {
-    item.priority = priority;
-    setClone();
+  const editTodoTag = () => {
+    setEditingTag({
+      sectionKey,
+      index: idx,
+    });
+    setEditingTagName(item.tag ?? "");
   };
 
-  return { editTodo, deleteTodo, markTodo, markCompleted, pin, unPin, toggleCompleted, toggleTodo, setPriority };
+  const editTodoDueDate = () => {
+    setEditingDueDate({
+      sectionKey,
+      index: idx,
+    });
+    setEditingDueDateValue(item.dueDate ?? 0);
+  };
+
+  const setPriority = (priority?: 1 | 2 | 3) => {
+    updateTodo((_sections, todo) => {
+      todo.priority = priority;
+    });
+  };
+
+  return {
+    editTodo,
+    editTodoTag,
+    editTodoDueDate,
+    deleteTodo,
+    markTodo,
+    markCompleted,
+    pin,
+    unPin,
+    toggleCompleted,
+    toggleTodo,
+    setPriority,
+  };
 };

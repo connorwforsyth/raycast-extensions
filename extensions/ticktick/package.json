@@ -7,7 +7,9 @@
   "contributors": [
     "viduycheung",
     "Alireza",
-    "yakitrak"
+    "yakitrak",
+    "ridemountainpig",
+    "harsh_varshney"
   ],
   "license": "MIT",
   "categories": [
@@ -119,6 +121,16 @@
       "subtitle": "TickTick",
       "description": "Quick way to add task in TickTick.",
       "mode": "no-view",
+      "preferences": [
+        {
+          "name": "nlpEnabled",
+          "description": "Recognize dates and times (tomorrow 3pm), priorities (!High, !Medium, !Low, !None), tags (#tag), and lists (~list) in the task title. When enabled, the Default Date preference is ignored, even if the title contains no date.",
+          "type": "checkbox",
+          "default": true,
+          "label": "Enable NLP",
+          "required": false
+        }
+      ],
       "arguments": [
         {
           "name": "text",
@@ -134,9 +146,97 @@
       ]
     }
   ],
+  "tools": [
+    {
+      "name": "get-tasks",
+      "title": "Get Tasks",
+      "description": "Get tasks in smart list"
+    },
+    {
+      "name": "add-task",
+      "title": "Add Task",
+      "description": "Add task to TickTick"
+    },
+    {
+      "name": "get-lists",
+      "title": "Get Lists",
+      "description": "Get Lists in TickTick"
+    }
+  ],
+  "ai": {
+    "instructions": "",
+    "evals": [
+      {
+        "input": "@ticktick get tasks in today",
+        "mocks": {
+          "get-tasks": [
+            {
+              "id": "6821491f8e31d12726fb9992",
+              "title": "Buy oat milk",
+              "content": "",
+              "desc": "",
+              "priority": 3,
+              "projectId": "6821491f8e31d12726fb9993",
+              "kind": "TEXT",
+              "startDate": "2025-05-11T16:00:00+0000",
+              "dueDate": "",
+              "isAllDay": true,
+              "isFloating": false,
+              "timeZone": "Asia/Shanghai",
+              "items": [],
+              "tags": []
+            }
+          ]
+        },
+        "expected": [
+          {
+            "callsTool": {
+              "name": "get-tasks",
+              "arguments": {
+                "smartProjectId": "today"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "input": "@ticktick get tasks in next 7 days",
+        "mocks": {
+          "get-tasks": [
+            {
+              "id": "6821491f8e31d12726fb9992",
+              "title": "Buy oat milk",
+              "content": "",
+              "desc": "",
+              "priority": 3,
+              "projectId": "6821491f8e31d12726fb9993",
+              "kind": "TEXT",
+              "startDate": "2025-05-11T16:00:00+0000",
+              "dueDate": "",
+              "isAllDay": true,
+              "isFloating": false,
+              "timeZone": "Asia/Shanghai",
+              "items": [],
+              "tags": []
+            }
+          ]
+        },
+        "expected": [
+          {
+            "callsTool": {
+              "name": "get-tasks",
+              "arguments": {
+                "smartProjectId": "next7Days"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
   "dependencies": {
-    "@raycast/api": "^1.36.0",
-    "@raycast/utils": "^1.8.0",
+    "@raycast/api": "^2.4.1",
+    "@raycast/utils": "^1.19.0",
     "lodash": "^4.17.21",
     "moment": "^2.29.1",
     "moment-timezone": "^0.5.44",
@@ -144,9 +244,10 @@
     "similarity": "^1.2.1"
   },
   "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
     "@types/lodash": "^4.14.194",
-    "@types/node": "~16.10.0",
-    "@types/react": "^17.0.28",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.0.10",
     "@types/similarity": "^1.2.1",
     "@types/sql.js": "^1.4.3",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
@@ -156,7 +257,7 @@
     "eslint-plugin-html": "^6.2.0",
     "eslint-plugin-react-hooks": "^4.2.0",
     "prettier": "^2.8.7",
-    "typescript": "^4.4.3"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "build": "ray build -e dist",
@@ -164,5 +265,8 @@
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
     "publish": "ray publish"
-  }
+  },
+  "platforms": [
+    "macOS"
+  ]
 }
